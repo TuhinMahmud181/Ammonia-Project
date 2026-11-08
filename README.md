@@ -9,7 +9,13 @@ Open `index.html` in a browser. It has no dependencies and needs no build step.
 - **Operate the rig on a live P&ID.** Click any element on the drawing to get its control right there: cylinders, valves (HV-111, HV-205, HV-201, HV-202, HV-601), the NV-401 opening, the set points of FIC-101 and FIC-102, the Ar rotameter FI-104, the vacuum pump P-601, the furnace H-201 and its set point, the ESD button, and the catalyst in R-201. Gas moves along each pipe as coloured dashes, faster for more flow. The colour shows the gas the pipe holds; pale dotted pipes are under vacuum.
 - **Set the catalyst.** Click the reactor in the drawing and type or slide the catalyst charge (5–150 g) and its active-material content (0–20 %). The melt depth and the rates follow during a run.
 - **See the instrument wiring.** PT-201, PT-301, TE-201 and both MFCs are wired to a LabJack U6. The U6 writes the MFC set points from DAC0 and DAC1, and switches P-601 from FIO0 through a relay. It connects by USB to a PC that shows the live readings and trends. Each U6 terminal shows its live voltage, and a wiring table lists the channels and their scaling.
-- **Run one loop.** Heat under Ar, bubble Ar through both dip tubes S1 and S2 and out through the trap, then bubble H₂ (S2) and N₂ (S1) through the melt, close the outlet and hold for the set time, close the inlets and open the outlet, sweep with Ar, and analyse the trap. The run-sequence panel ticks each step off, and **Run one loop** carries it out automatically. The PSV-301 discharge line stays empty unless the valve lifts on overpressure.
+- **Run a timed program.** The run starts with the melt hot and liquid under Ar, and repeats four phases for the number of cycles you set. Each phase has its own time, and the total run time is the sum. The phase name and countdown show on the drawing while it runs:
+  1. **Ar purge:** Ar bubbles through dip tubes S1 and S2 and leaves through NV-401 and the acid trap.
+  2. **Evacuation:** the cylinders are shut and P-601 pulls the reactor down through NV-401, which opens in stages.
+  3. **Reaction:** NV-401 is shut. H₂ bubbles through S2 and N₂ through S1 until PT-301 reaches the fill pressure, and the melt is held under that gas for the rest of the phase.
+  4. **Release:** all inlets are shut and NV-401 opens slowly.
+
+  An optional final Ar purge sweeps everything into the trap, which is then analysed. HV-202 stays closed. The PSV-301 discharge line only shows flow if the valve lifts on overpressure.
 - **Compare kinetic hypotheses.** The rig is built to measure the kinetics, so the chemistry is a choice, not a prediction:
   - **A · stable nitride:** a metal nitride forms and is too stable to give NH₃. N₂ uptake shows on PT-301, but the acid stays blank.
   - **B · catalytic:** NH₃ forms at a turnover frequency (TOF) you set, with an Arrhenius term and the NH₃ equilibrium limit.

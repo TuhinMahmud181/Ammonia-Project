@@ -110,6 +110,26 @@ summary { cursor: pointer; font-weight: 600; font-size: 13px; }
 .alarms div.alarm { border-left-color: var(--hot); background: #fdeeea; }
 .demo { font-size: 12.5px; color: var(--muted); margin-top: 8px; min-height: 18px; }
 .demo b { color: var(--ink); }
+.phases { display: grid; gap: 6px; margin-top: 10px; }
+.phase { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center; font-size: 13px; }
+.phase i { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; font-style: normal; font-family: var(--font-mono); font-size: 12px; color: #fff; font-weight: 700; }
+.num { font-family: var(--font-mono); color: var(--accent); font-weight: 600; white-space: nowrap; }
+.num input { width: 64px; font: inherit; font-family: var(--font-mono); color: var(--accent); font-weight: 600; text-align: right; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: #f6f8f8; }
+.ctl.prog label { align-items: center; }
+.total { margin-top: 10px; font-size: 13px; color: var(--muted); }
+.total b { font-family: var(--font-mono); color: var(--ink); font-size: 15px; }
+.pbar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; margin-top: 10px; background: #e9eeee; }
+.pbar span { height: 100%; position: relative; border-right: 1px solid #fff; opacity: .35; }
+.pbar span.done { opacity: 1; }
+.pbar span.now { opacity: 1; background-image: linear-gradient(90deg, rgba(255,255,255,0) 0, rgba(255,255,255,.45) 100%); }
+.tl { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; max-height: 300px; overflow-y: auto; }
+.tl li { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: center; font-size: 13px; padding: 4px 6px; border-radius: 6px; }
+.tl li i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+.tl li.now { background: #eef6f9; font-weight: 600; }
+.tl li.done { color: var(--muted); }
+.tl li.done b::after { content: " ✓"; color: var(--ok); }
+.tl li span:last-child { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.tl .desc { grid-column: 2 / -1; font-size: 12px; color: var(--muted); font-weight: 400; }
 .kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
 .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; border-top: 3px solid var(--accent); }
 .kpi.sun { border-top-color: var(--sun); }
@@ -173,7 +193,7 @@ th { font-size: 12px; color: var(--muted); font-weight: 500; }
     <div>
       <div class="back"><a href="https://tuhinmahmud181.github.io/">← Tuhin Mahmud</a></div>
       <h1>Ammonia Kinetics Rig · Virtual Lab</h1>
-      <p>Bench rig for measuring ammonia synthesis over a liquid-metal catalyst, from the gas cylinders to the vent, drawn from the rig P&amp;ID (PID-002, simplified). Open the valves, run the furnace, purge, fill, hold, release through the acid traps, and analyse what was caught.</p>
+      <p>Bench rig for measuring ammonia synthesis over a liquid-metal catalyst, from the gas cylinders to the vent, drawn from the rig P&amp;ID (PID-002, simplified). Set the time for each phase (Ar purge, Evacuation, Reaction, Release) and watch the run, or operate any valve yourself by clicking it.</p>
       <p class="byline">Tuhin Mahmud · Department of Chemical Engineering, BUET</p>
     </div>
     <div class="pills">
@@ -216,6 +236,7 @@ th { font-size: 12px; color: var(--muted); font-weight: 500; }
             <option value="10">×10</option>
             <option value="60" selected>×60 (1 h in 1 min)</option>
             <option value="300">×300 (1 h in 12 s)</option>
+            <option value="600">×600 (1 h in 6 s)</option>
           </select>
         </div>
         <div class="btns">
@@ -226,27 +247,24 @@ th { font-size: 12px; color: var(--muted); font-weight: 500; }
         <textarea id="csvBox" readonly aria-label="CSV text"></textarea>
       </div>
 
-      <div class="card">
-        <h2>Auto-run one loop</h2>
-        <div class="btns">
-          <button class="primary" id="bDemo" type="button">Run one loop</button>
-          <select id="sHold" aria-label="Hold time">
-            <option value="10">hold 10 min</option>
-            <option value="20">hold 20 min</option>
-            <option value="30">hold 30 min</option>
-            <option value="40">hold 40 min</option>
-            <option value="50">hold 50 min</option>
-            <option value="60" selected>hold 60 min</option>
-            <option value="70">hold 70 min</option>
-            <option value="80">hold 80 min</option>
-            <option value="90">hold 90 min</option>
-            <option value="100">hold 100 min</option>
-            <option value="110">hold 110 min</option>
-            <option value="120">hold 120 min</option>
-          </select>
-          <button id="bDemoStop" type="button" disabled>Stop</button>
+      <div class="card" id="progCard">
+        <h2>Run program</h2>
+        <div class="phases" id="phaseIn"></div>
+        <div class="ctl prog">
+          <label for="pCycles">Cycles <span class="num"><input type="number" id="pCycles" min="1" max="10" step="1" value="1"></span></label>
+          <label for="pFill">Reaction fill pressure, PT-301 <span class="num"><input type="number" id="pFill" min="102" max="145" step="1" value="120"> kPa</span></label>
+          <label for="pAr">Ar flow, FI-104 <span class="num"><input type="number" id="pAr" min="10" max="500" step="5" value="150"> sccm</span></label>
+          <label for="pH2">H₂ flow, FIC-101 (S2) <span class="num"><input type="number" id="pH2" min="1" max="100" step="1" value="75"> sccm</span></label>
+          <label for="pN2">N₂ flow, FIC-102 (S1) <span class="num"><input type="number" id="pN2" min="1" max="100" step="1" value="25"> sccm</span></label>
+          <label class="chk"><input type="checkbox" id="pSweep" checked> <span>Final Ar purge after the last cycle, to sweep everything into the trap</span></label>
         </div>
-        <div class="demo" id="demo">Restarts and runs one loop: clear the air, heat under Ar, Ar through both dip tubes, H₂ + N₂ bubbling through the melt, hold, inlets closed and outlet opened, Ar sweep, analysis.</div>
+        <div class="total" id="pTotal"></div>
+        <div class="btns">
+          <button class="primary" id="bStart" type="button">Start run</button>
+          <button id="bStop" type="button" disabled>Stop</button>
+        </div>
+        <div class="pbar" id="pBar" aria-hidden="true"></div>
+        <div class="demo" id="demo">Starts from a hot melt under Ar and runs the phases in order.</div>
       </div>
 
       <div class="card">
@@ -326,7 +344,7 @@ th { font-size: 12px; color: var(--muted); font-weight: 500; }
     <div class="col">
       <section class="card">
         <h2>Run sequence</h2>
-        <ol class="sop" id="sop"></ol>
+        <ol class="tl" id="sop"></ol>
       </section>
       <section class="card">
         <h2>Acid trap · indophenol analysis</h2>

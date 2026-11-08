@@ -28,6 +28,7 @@
   function defaults() {
     return {
       Tamb: 30,               // °C, lab ambient
+      hotStart: true,         // start with the melt liquid at the furnace set point, rig under Ar
       actPct: 5,              // at% active metal in the melt
       Mmelt: 170,             // g/mol, mean molar mass of the melt
       meltMass: 50,           // g
@@ -112,7 +113,20 @@
     s.analysis = null;
     s.yLiquid = 0;
     s.speedCap = 0;
-    event(s, "info", "Rig cold, reactor and lines full of air, all valves closed, cylinders shut.");
+    s.prog = null; s.reactSec = 0;
+    if (p.hotStart) {
+      // melt already liquid at the furnace set point; reactor and feed lines under Ar at 1 atm
+      const UAf = 1.2, UAfr = 1.5, UAtop = 0.15, Tf = s.sp.furnaceSP + 273.15;
+      s.th.Tf = Tf; s.th.Tm = (UAfr * Tf + UAtop * Ta) / (UAfr + UAtop);
+      s.th.I = (UAf * (Tf - Ta) + UAfr * (Tf - s.th.Tm)) / 1400;
+      s.v.furnace = true;
+      const AR_ = [0, 0, 1, 0, 0];
+      ["h2l", "hdr", "rx", "y", "ln"].forEach((k) => { const nd = s.N[k]; s.N[k] = node(nd.V, k === "rx" ? Ta + 0.85 * (s.th.Tm - Ta) : Ta, PATM, AR_); });
+      s.sop.done.purge = true; s.sop.done.melt = true;
+      event(s, "info", `Hot start: melt liquid at ${(s.th.Tm - 273.15).toFixed(0)} °C (furnace ${s.sp.furnaceSP} °C), reactor and feed lines under Ar.`);
+    } else {
+      event(s, "info", "Rig cold, reactor and lines full of air, all valves closed, cylinders shut.");
+    }
   }
 
   function event(s, level, text) { s.events.push({ t: s.t, level, text }); if (s.events.length > 400) s.events.shift(); }
@@ -148,6 +162,7 @@
 
   /* ---------------- one time step ---------------- */
   function step(s, dt) {
+    if (s.prog && !s.prog.done) progTick(s, dt);
     const p = s.p, N = s.N, v = s.v, L = s.liq, m = s.melt, th = s.th;
     const Ta = p.Tamb + 273.15;
     const power = !p.fPower;
@@ -345,7 +360,7 @@
     const xH2 = frac(N.rx, H2), xO2 = frac(N.rx, O2);
     alarm(s, "flam", xH2 > 0.04 && xO2 > 0.05, "alarm", "FLAMMABLE: H₂ and O₂ together in R-201 (H₂ > 4 %, O₂ > 5 %). Stop H₂, purge with Ar.");
     alarm(s, "ign", xH2 > 0.04 && xO2 > 0.05 && TmC > 500, "alarm", "IGNITION: flammable mixture above H₂ autoignition temperature.");
-    alarm(s, "o2hot", xO2 > 1e-4 && TmC > 100 && s.cat.metal > 0, "warn", "Air in R-201 with hot melt: the catalyst metal is oxidising (purge with Ar before heating).");
+    alarm(s, "o2hot", xO2 * Prx * 1000 > 10 && TmC > 100 && s.cat.metal > 0, "warn", "Air in R-201 with hot melt: the catalyst metal is oxidising (purge with Ar before heating).");
     alarm(s, "pHigh", Prx > 130, "warn", "PT-301 high (>130 kPa): reactor pressurising. Check outlet line-up.");
     alarm(s, "psv", fl.psv > 1, "alarm", "PSV-301 lifting: reactor gas venting outdoors.");
     alarm(s, "pt201", press(N.hdr) / 1000 > 170, "warn", "PT-201 high: feed dead-headed. Sparger blocked or no outlet path?");
@@ -458,7 +473,7 @@
     };
     const a1 = one(s.liq.a1);
     const tot = a1.umol;
-    const hold = s.sop.holdMin || 0;
+    const hold = s.reactSec > 0 ? s.reactSec / 60 : (s.sop.holdMin || 0);
     s.analysis = { t: s.t, a1, slip: s.made.slip * 1e6, totUmol: tot, holdMin: hold, nAct: s.melt.nAct,
       tofApparent: hold > 0 && s.melt.nAct > 0 ? (tot * 1e-6) / (s.melt.nAct * hold * 60) : null,
       tofLOD: hold > 0 && s.melt.nAct > 0 ? ((0.02 * (s.p.acidVol / 1000) / 14.007) * 1e-3) / (s.melt.nAct * hold * 60) : null };
@@ -488,46 +503,90 @@
     event(s, "info", "R-201 opened, spargers cleared, gasket replaced. Reactor is full of air again: leak-test and purge before use.");
   }
 
-  /* scripted demonstration of one run loop (also used as the self-test) */
-  function demoScript(holdMin, opt) {
-    opt = Object.assign({ arMin: 20, displaceMin: 15, fillKPa: 120, sweepMin: 20 }, opt || {});
-    const P = (s) => press(s.N.rx) / 1000;
-    const H = holdMin || 60;
-    const A = [];
-    const add = (note, when, act) => A.push({ note, when, act });
-    add("Cold purge: evacuate R-201 and the feed lines (HV-111 + HV-202 open, HV-601 open, P-601 on, NV-401 8 %)",
-      () => true, (s) => { s.v.HV111 = true; s.v.HV202 = true; s.v.HV601 = true; s.v.pump = true; s.v.NV401 = 8; });
-    add("Below 30 kPa: NV-401 to 20 %", (s) => P(s) < 30, (s) => { s.v.NV401 = 20; });
-    add("Below 2 kPa: close NV-401, close HV-601, stop P-601; refill with Ar 300 sccm", (s) => P(s) < 2,
-      (s) => { s.v.NV401 = 0; s.v.HV601 = false; s.v.pump = false; s.v.cylAr = true; s.sp.FI104 = 300; s._evac = (s._evac || 0) + 1; });
-    add("Second cycle: evacuate again", (s) => P(s) > 102, (s) => { s.sp.FI104 = 0; s.v.HV601 = true; s.v.pump = true; s.v.NV401 = 8; });
-    add("Below 30 kPa: NV-401 to 20 %", (s) => P(s) < 30, (s) => { s.v.NV401 = 20; });
-    add("Below 2 kPa: close NV-401, close HV-601, stop P-601; refill with Ar 300 sccm", (s) => P(s) < 2,
-      (s) => { s.v.NV401 = 0; s.v.HV601 = false; s.v.pump = false; s.sp.FI104 = 300; });
-    add("Heat under Ar: furnace on (SP 220 °C), Ar 100 sccm through the headspace (HV-202) and out through NV-401 to the trap",
-      (s) => P(s) > 102, (s) => { s.v.HV111 = false; s.sp.FI104 = 100; s.v.NV401 = 40; s.v.furnace = true; s.sp.furnaceSP = 220; });
-    add("Melt liquid: close HV-202 and open HV-111 so the Ar builds pressure in both feed lines",
-      (s) => s.fL >= 1 && s.th.Tm - 273.15 > 185, (s) => { s.v.HV202 = false; s.v.HV111 = true; s.sp.FI104 = 150; });
-    add(`Feed lines above R-201 pressure: open HV-201 (S1) and HV-205 (S2); Ar bubbles through both dip tubes and out to the trap for ${opt.arMin} min`,
-      (s) => press(s.N.hdr) > press(s.N.rx) + 3000 && press(s.N.h2l) > press(s.N.rx) + 3000, (s) => { s.v.HV201 = true; s.v.HV205 = true; s._ar = s.t; });
-    add("Ar done: stop Ar, close HV-111. H₂ 75 sccm bubbles through S2 and N₂ 25 sccm through S1, outlet still open to push the Ar out",
-      (s) => s.t - s._ar >= opt.arMin * 60, (s) => { s.sp.FI104 = 0; s.v.cylAr = false; s.v.HV111 = false; s.v.cylH2 = true; s.sp.FIC101 = 75; s.v.cylN2 = true; s.sp.FIC102 = 25; s._dsp = s.t; });
-    add(`After ${opt.displaceMin} min: close the outlet NV-401; H₂ and N₂ keep bubbling until PT-301 reaches ${opt.fillKPa} kPa`,
-      (s) => s.t - s._dsp >= opt.displaceMin * 60, (s) => { s.v.NV401 = 0; });
-    add(`PT-301 at ${opt.fillKPa} kPa: MFCs to zero, hold ${H} min with the melt under N₂ + H₂`,
-      (s) => P(s) >= opt.fillKPa, (s) => { s.sp.FIC101 = 0; s.sp.FIC102 = 0; s._hold = s.t; });
-    add(`Hold ${H} min done: close the inlet valves (HV-201, HV-205, cylinders), open the outlet NV-401 to 40 %`,
-      (s) => s.t - s._hold >= H * 60, (s) => { s.v.HV201 = false; s.v.HV205 = false; s.v.cylH2 = false; s.v.cylN2 = false; s.v.NV401 = 40; s._rel = s.t; });
-    add("Pressure down: Ar 150 sccm into the header, HV-111 open, so both feed lines build pressure again",
-      (s) => P(s) < 103 && s.t - s._rel > 60, (s) => { s.v.cylAr = true; s.sp.FI104 = 150; s.v.HV111 = true; });
-    add(`Feed lines above R-201 pressure: open HV-201 and HV-205; Ar bubbles through S1 and S2 for ${opt.sweepMin} min, sweeping everything into AB-507`,
-      (s) => press(s.N.hdr) > press(s.N.rx) + 3000 && press(s.N.h2l) > press(s.N.rx) + 3000, (s) => { s.v.HV201 = true; s.v.HV205 = true; s._sw = s.t; });
-    add("Sweep done: stop Ar, close the dip-tube valves and the outlet, analyse AB-507",
-      (s) => s.t - s._sw >= opt.sweepMin * 60, (s) => { s.sp.FI104 = 0; s.v.cylAr = false; s.v.HV111 = false; s.v.HV201 = false; s.v.HV205 = false; s.v.NV401 = 0; analyse(s); });
-    return A;
+  /* ---------------- run program: Ar purge -> Evacuation -> Reaction -> Release, repeated ---------------- */
+  const PHASES = [
+    { key: "ar", name: "Ar purge" },
+    { key: "evac", name: "Evacuation" },
+    { key: "react", name: "Reaction" },
+    { key: "rel", name: "Release" }
+  ];
+  function programDefaults() {
+    return { min: { ar: 15, evac: 10, react: 60, rel: 15 }, cycles: 1, arSccm: 150, h2Sccm: 75, n2Sccm: 25, fillKPa: 120, finalSweep: true };
+  }
+  function programPlan(cfg) {
+    const plan = [];
+    for (let c = 1; c <= cfg.cycles; c++) PHASES.forEach((ph) => plan.push({ key: ph.key, name: ph.name, cycle: c, min: cfg.min[ph.key] }));
+    if (cfg.finalSweep) plan.push({ key: "ar", name: "Ar purge (final sweep)", cycle: cfg.cycles, min: cfg.min.ar, final: true });
+    return plan;
+  }
+  function startProgram(s, cfg) {
+    cfg = Object.assign(programDefaults(), cfg || {});
+    cfg.min = Object.assign(programDefaults().min, cfg.min || {});
+    const plan = programPlan(cfg);
+    s.prog = { cfg, plan, idx: -1, t0: s.t, tStart: s.t, total: plan.reduce((a, p) => a + p.min * 60, 0), done: false };
+    s.reactSec = 0;
+    event(s, "info", `Run started: ${cfg.cycles} cycle${cfg.cycles > 1 ? "s" : ""} of Ar purge ${cfg.min.ar} min, Evacuation ${cfg.min.evac} min, Reaction ${cfg.min.react} min, Release ${cfg.min.rel} min${cfg.finalSweep ? ", then a final Ar purge" : ""}.`);
+    enterPhase(s, 0);
+  }
+  function stopProgram(s) { if (s.prog && !s.prog.done) { s.prog.done = true; s.prog.stopped = true; event(s, "info", "Run stopped by the operator."); } }
+  function enterPhase(s, i) {
+    const P = s.prog, v = s.v, c = P.cfg;
+    P.idx = i; P.t0 = s.t; P.st = {};
+    if (i >= P.plan.length) {
+      P.done = true;
+      v.cylAr = false; s.sp.FI104 = 0; v.HV111 = false; v.HV201 = false; v.HV205 = false; v.NV401 = 0;
+      event(s, "ok", "Run complete: all inlets and the outlet closed. Analysing AB-507.");
+      analyse(s);
+      return;
+    }
+    const ph = P.plan[i];
+    event(s, "info", `Cycle ${ph.cycle} · ${ph.name} (${ph.min} min) started.`);
+    if (ph.key === "ar") {
+      v.cylH2 = false; v.cylN2 = false; s.sp.FIC101 = 0; s.sp.FIC102 = 0;
+      v.HV601 = false; v.pump = false;
+      v.cylAr = true; s.sp.FI104 = c.arSccm; v.HV111 = true; v.HV202 = false;
+      v.NV401 = 40;                                   // dip-tube valves open once the feed lines are above reactor pressure
+    } else if (ph.key === "evac") {
+      v.cylAr = false; s.sp.FI104 = 0; v.cylH2 = false; v.cylN2 = false; s.sp.FIC101 = 0; s.sp.FIC102 = 0;
+      v.HV111 = false;                                // keep the H2 (S2) and N2 (S1) lines separate from now on
+      v.HV601 = true; v.pump = true; v.NV401 = 8;     // NV-401 opened in stages so the pump exhaust does not blow through the acid
+    } else if (ph.key === "react") {
+      v.NV401 = 0; v.HV601 = false; v.pump = false;   // outlet shut: NV-401 first, then HV-601, then the pump
+      v.HV111 = false; v.HV201 = true; v.HV205 = true;
+      v.cylH2 = true; v.cylN2 = true; s.sp.FIC101 = c.h2Sccm; s.sp.FIC102 = c.n2Sccm; P.st.feeding = true;
+    } else if (ph.key === "rel") {
+      s.sp.FIC101 = 0; s.sp.FIC102 = 0; v.cylH2 = false; v.cylN2 = false;
+      v.HV201 = false; v.HV205 = false; v.HV111 = false;
+      v.NV401 = 0;                                    // then opened slowly through the phase
+    }
+  }
+  function progTick(s, dt) {
+    const P = s.prog, v = s.v, c = P.cfg, ph = P.plan[P.idx];
+    if (!ph) return;
+    const el = s.t - P.t0, Prx = press(s.N.rx) / 1000;
+    if (ph.key === "ar") {
+      if (!v.HV201 && press(s.N.hdr) > press(s.N.rx) + 3000 && press(s.N.h2l) > press(s.N.rx) + 3000) { v.HV201 = true; v.HV205 = true; }
+    } else if (ph.key === "evac") {
+      if (Prx < 3) v.NV401 = 100; else if (Prx < 30) v.NV401 = Math.max(v.NV401, 20);
+    } else if (ph.key === "react") {
+      s.reactSec += dt;
+      // pressure-limited feed: bubble until the fill pressure, then top up only if it falls 3 kPa below
+      if (P.st.feeding && Prx >= c.fillKPa) { P.st.feeding = false; s.sp.FIC101 = 0; s.sp.FIC102 = 0; if (!P.st.filled) { P.st.filled = true; event(s, "info", `PT-301 at ${c.fillKPa} kPa: feed stopped, melt held under H₂ + N₂.`); } }
+      else if (!P.st.feeding && Prx < c.fillKPa - 3) { P.st.feeding = true; s.sp.FIC101 = c.h2Sccm; s.sp.FIC102 = c.n2Sccm; }
+    } else if (ph.key === "rel") {
+      v.NV401 = Math.min(100, Math.round(100 * el / (ph.min * 60)));
+    }
+    if (el >= ph.min * 60) enterPhase(s, P.idx + 1);
+  }
+  function programStatus(s) {
+    const P = s.prog; if (!P) return null;
+    const ph = P.plan[P.idx];
+    const elapsed = s.t - P.tStart;
+    return { done: P.done, stopped: !!P.stopped, idx: P.idx, n: P.plan.length, phase: ph, cycle: ph ? ph.cycle : P.cfg.cycles, cycles: P.cfg.cycles,
+      left: ph ? Math.max(0, ph.min * 60 - (s.t - P.t0)) : 0, elapsed, total: P.total, plan: P.plan };
   }
 
-  const api = { create, reset, step, advance, readings, analyse, freshTraps, openReactor, demoScript, setMelt, defaults, meltProps, press, frac, SP, SCCM, PATM };
+  const api = { create, reset, step, advance, readings, analyse, freshTraps, openReactor, startProgram, stopProgram, programStatus, programDefaults, PHASES, setMelt, defaults, meltProps, press, frac, SP, SCCM, PATM };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.AmmoniaSim = api;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -7,7 +7,7 @@ const NS = "http://www.w3.org/2000/svg";
 const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 let s = S.create({});
-let running = true, speed = 60, demo = null, demoIdx = 0, anim = 0;
+let running = true, speed = 60, anim = 0;
 const params = () => ({
   mode: $("sMode").value, logTOF: +$("iTOF").value, Ea: +$("iEa").value, storePct: +$("iStore").value,
   nitrideTau: +$("iTau").value, meltMass: +$("iMass").value, actPct: +$("iAct").value,
@@ -64,7 +64,8 @@ pipe("M350 470 H460 V300", "hdr", () => s.flows.FI104);
 // header to sparger S1 and to the headspace
 pipe("M460 300 H620", "hdr", () => s.flows.S1 + s.flows.HV202);
 pipe("M620 300 H765 V588", "hdr", () => s.flows.S1);
-pipe("M620 300 V220 H812 V385", "hdr", () => s.flows.HV202);
+pipe("M620 300 V220 H690", "hdr", () => s.flows.HV202);
+pipe("M690 220 H812 V385", "rx", () => s.flows.HV202);
 // outlet
 pipe("M860 352 V170 H1010", "rx", () => s.flows.NV401 + s.flows.psv);
 pipe("M950 170 V128", "rx", () => s.flows.psv);
@@ -118,7 +119,7 @@ function valve(id, key, x, y, opt) {
   if (opt.reg) { el("line", { x1: x, y1: y, x2: x, y2: y - 14, stroke: "var(--ink)", "stroke-width": 1.4 }, g); el("path", { d: `M${x - 9} ${y - 14} A9 9 0 0 1 ${x + 9} ${y - 14} Z`, fill: "#fff", stroke: "var(--ink)", "stroke-width": 1.4 }, g); }
   const lx = opt.lx !== undefined ? opt.lx : x, ly = opt.ly !== undefined ? opt.ly : y + 30;
   txt(lx, ly, id, "tag mono", g, opt.anchor);
-  clickable(g, opt.ctl || id);
+  if (!opt.locked) clickable(g, opt.ctl || id);
   valves[id] = { b, key, g };
   return g;
 }
@@ -169,7 +170,8 @@ txt(444, 290, "X-1", "small");
 inst("PT", "201", 540, 255, 296, () => `${(S.press(s.N.hdr) / 1000).toFixed(1)} kPa abs, feed header → U6 AIN0`);
 el("circle", { cx: 620, cy: 300, r: 4, fill: "var(--ink)" });
 valve("HV-201", "HV201", 690, 300);
-valve("HV-202", "HV202", 690, 220);
+valve("HV-202", "HV202", 690, 220, { locked: true, lx: 690, ly: 250 });
+txt(690, 263, "always closed", "small");
 const fS1 = flowTag(745, 288, "end"), fS2 = flowTag(600, 88), fHS = flowTag(760, 212), fH2x = flowTag(410, 72), fN2x = flowTag(410, 272), fArx = flowTag(410, 442);
 
 /* furnace and reactor (back layer, so the dip tubes show in front) */
@@ -304,6 +306,16 @@ const trendP = el("path", { d: "", fill: "none", stroke: "#4fc3e8", "stroke-widt
 const trendT = el("path", { d: "", fill: "none", stroke: "#ff8a65", "stroke-width": 1.2 });
 txt(pcX + 150, pcY + 120, "PT-301 · TE-201, last 60 min", "mono", null, "end", "font-size:7px;fill:#7a8f97");
 
+/* ---------------- phase banner on the drawing ---------------- */
+const PH_COL = { ar: "#56646b", evac: "#0d6f8f", react: "#5b4fc4", rel: "#c06f12" };
+const banner = el("g", { "pointer-events": "none" });
+const bRect = el("rect", { x: 560, y: 8, width: 330, height: 54, rx: 9, fill: "#fff", stroke: "#d4dcdb", "stroke-width": 1.4 }, banner);
+const bChip = el("rect", { x: 568, y: 16, width: 8, height: 38, rx: 3, fill: "#c4cdcf" }, banner);
+const bTitle = txt(586, 33, "No run", "tag", banner, "start", "font-size:16px;font-weight:700");
+const bSub = txt(586, 51, "Set the phase times and press Start run", "small", banner, "start", "font-size:11.5px");
+const bLeft = txt(880, 33, "", "mono", banner, "end", "font-size:16px;font-weight:700");
+const bNext = txt(880, 51, "", "small", banner, "end", "font-size:11px");
+
 /* ---------------- tooltips ---------------- */
 const tip = $("tip");
 svg.addEventListener("mousemove", (e) => {
@@ -326,7 +338,6 @@ const ONOFF = {
   "HV-111": ["HV-111", "HV111", "H₂ line to the N₂/Ar header (send H₂ through S1, or purge the H₂ line)."],
   "HV-205": ["HV-205", "HV205", "H₂ line to sparger S2, straight into the melt."],
   "HV-201": ["HV-201", "HV201", "Header to sparger S1, into the melt."],
-  "HV-202": ["HV-202", "HV202", "Header to the reactor headspace (purge, refill, sweep)."],
   "HV-601": ["HV-601", "HV601", "Isolates the vacuum pump. Close it before you stop P-601."],
   pump: ["P-601 vacuum pump", "pump", "Switched by U6 FIO0 through a relay. Exhausts through AB-507."],
   esd: ["HS-902 ESD", "esd", "Cuts the supply: P-601, the MFCs and the furnace stop."]
@@ -408,7 +419,6 @@ function livePop() {
   else if (id === "pump") t = `${f.pump.toFixed(0)} sccm · suction ${(S.press(s.N.y) / 1000).toFixed(1)} kPa`;
   else if (id === "HV-201") t = `S1 ${f.S1.toFixed(1)} sccm · PT-201 ${(S.press(s.N.hdr) / 1000).toFixed(1)} kPa`;
   else if (id === "HV-205") t = `S2 ${f.S2.toFixed(1)} sccm`;
-  else if (id === "HV-202") t = `${f.HV202.toFixed(1)} sccm into the headspace`;
   else if (id === "HV-111") t = `${f.HV111.toFixed(1)} sccm`;
   else if (id.startsWith("cyl")) t = s.v[id] ? "open" : "shut";
   else if (id === "esd") t = s.v.esd ? "PRESSED" : "armed";
@@ -417,7 +427,7 @@ function livePop() {
 
 /* ---------------- side-panel toggles and sliders ---------------- */
 const TOG = [["cylH2", "H₂ cyl"], ["cylN2", "N₂ cyl"], ["cylAr", "Ar cyl"], ["HV111", "HV-111"], ["HV205", "HV-205"],
-  ["HV201", "HV-201"], ["HV202", "HV-202"], ["HV601", "HV-601"], ["pump", "P-601"], ["furnace", "Furnace"], ["esd", "ESD"]];
+  ["HV201", "HV-201"], ["HV601", "HV-601"], ["pump", "P-601"], ["furnace", "Furnace"], ["esd", "ESD"]];
 TOG.forEach(([k, lab]) => {
   const b = document.createElement("button"); b.type = "button"; b.textContent = lab; b.id = "t_" + k;
   if (k === "esd") b.className = "danger";
@@ -472,16 +482,67 @@ $("sMode").addEventListener("change", modeUI);
 /* ---------------- buttons ---------------- */
 function say(t, warn) { $("msg").textContent = t; $("msg").style.color = warn ? "var(--hot)" : "var(--ok)"; setTimeout(() => { if ($("msg").textContent === t) $("msg").textContent = ""; }, 4000); }
 const RES0 = "Run the hold and the sweep first, then analyse. Detection limit 0.02 mg N/L.";
-function restart() { s = S.create(params()); demo = null; closePop(); $("bDemoStop").disabled = true; $("res").textContent = RES0; refreshToggles(); syncSliders(); meltNote(); drawCharts(); updatePanel(); }
+function restart() { s = S.create(params()); closePop(); $("bStop").disabled = true; $("res").textContent = RES0; refreshToggles(); syncSliders(); meltNote(); drawCharts(); updatePanel(); }
 $("bPlay").addEventListener("click", () => { running = !running; $("bPlay").textContent = running ? "Pause" : "Resume"; });
 $("bReset").addEventListener("click", restart);
 $("sSpeed").addEventListener("change", () => { speed = +$("sSpeed").value; });
-$("bDemo").addEventListener("click", () => {
-  restart(); demo = S.demoScript(+$("sHold").value); demoIdx = 0; $("bDemoStop").disabled = false;
+
+/* ---------------- run program ---------------- */
+const PH_INFO = {
+  ar: "Ar bubbles through S1 and S2 and leaves through NV-401 and AB-507.",
+  evac: "Cylinders shut; P-601 pulls R-201 down through NV-401 (opened in stages).",
+  react: "NV-401 shut; H₂ bubbles through S2 and N₂ through S1 up to the fill pressure, then the melt is held under it.",
+  rel: "All inlets shut; NV-401 opens slowly and the gas leaves through AB-507."
+};
+const pdef = S.programDefaults();
+$("phaseIn").innerHTML = S.PHASES.map((ph, k) => `<label class="phase" for="pt_${ph.key}"><i style="background:${PH_COL[ph.key]}">${k + 1}</i><span><b>${ph.name}</b></span><span class="num"><input type="number" id="pt_${ph.key}" min="1" max="240" step="1" value="${pdef.min[ph.key]}"> min</span></label>`).join("");
+const progCfg = () => {
+  const n = (id, lo, hi) => { const e = $(id); let v = Math.round(+e.value); if (!isFinite(v)) v = lo; v = Math.min(hi, Math.max(lo, v)); e.value = v; return v; };
+  return { min: { ar: n("pt_ar", 1, 240), evac: n("pt_evac", 1, 240), react: n("pt_react", 1, 240), rel: n("pt_rel", 1, 240) },
+    cycles: n("pCycles", 1, 10), fillKPa: n("pFill", 102, 145), arSccm: n("pAr", 10, 500), h2Sccm: n("pH2", 1, 100), n2Sccm: n("pN2", 1, 100), finalSweep: $("pSweep").checked };
+};
+const mm = (sec) => { const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = Math.floor(sec % 60); return (h ? `${h}:${String(m).padStart(2, "0")}` : `${m}`) + `:${String(x).padStart(2, "0")}`; };
+const hmin = (min) => (min >= 60 ? `${Math.floor(min / 60)} h ${min % 60} min` : `${min} min`);
+function showTotal() {
+  const c = progCfg(), per = c.min.ar + c.min.evac + c.min.react + c.min.rel, tot = per * c.cycles + (c.finalSweep ? c.min.ar : 0);
+  $("pTotal").innerHTML = `One cycle ${hmin(per)} · total run <b>${hmin(tot)}</b>${c.finalSweep ? ` (incl. final Ar purge ${c.min.ar} min)` : ""}`;
+  if (!s.prog || s.prog.done) drawBar(null, c);
+}
+document.querySelectorAll("#progCard input").forEach((e) => e.addEventListener("change", showTotal));
+function drawBar(st, c) {
+  const plan = st ? st.plan : (() => { const p = []; for (let k = 1; k <= c.cycles; k++) S.PHASES.forEach((ph) => p.push({ key: ph.key, min: c.min[ph.key] })); if (c.finalSweep) p.push({ key: "ar", min: c.min.ar }); return p; })();
+  const tot = plan.reduce((x, p) => x + p.min, 0);
+  $("pBar").innerHTML = plan.map((p, k) => `<span class="${st ? (k < st.idx || st.done ? "done" : k === st.idx ? "now" : "") : ""}" style="width:${(100 * p.min / tot).toFixed(2)}%;background-color:${PH_COL[p.key]}"></span>`).join("");
+}
+$("bStart").addEventListener("click", () => {
+  const c = progCfg();
+  restart();
+  S.startProgram(s, c);
+  $("bStop").disabled = false; running = true; $("bPlay").textContent = "Pause";
   if (speed < 60) { speed = 60; $("sSpeed").value = "60"; }
-  running = true; $("bPlay").textContent = "Pause";
 });
-$("bDemoStop").addEventListener("click", () => { demo = null; $("bDemoStop").disabled = true; $("demo").innerHTML = "Auto-run stopped. You have the controls."; });
+$("bStop").addEventListener("click", () => { S.stopProgram(s); $("bStop").disabled = true; });
+function updateProgram() {
+  const st = S.programStatus(s);
+  if (!st) { bTitle.textContent = "No run"; bSub.textContent = "Set the phase times and press Start run"; bLeft.textContent = ""; bNext.textContent = ""; bChip.setAttribute("fill", "#c4cdcf"); return; }
+  drawBar(st);
+  if (st.done) {
+    bTitle.textContent = st.stopped ? "Run stopped" : "Run complete"; bChip.setAttribute("fill", st.stopped ? "#c4472f" : "#2f8a57");
+    bSub.textContent = st.stopped ? "Valves left as they were" : "AB-507 analysed: see the results panel"; bLeft.textContent = mm(st.elapsed); bNext.textContent = "elapsed";
+    $("demo").innerHTML = st.stopped ? "Run stopped. You have the controls." : `Run complete in ${mm(st.elapsed)}. Results are in the analysis panel.`;
+    $("bStop").disabled = true;
+    return;
+  }
+  const ph = st.phase, k = S.PHASES.findIndex((p) => p.key === ph.key) + 1;
+  const nxt = st.plan[st.idx + 1];
+  bChip.setAttribute("fill", PH_COL[ph.key]);
+  bTitle.textContent = `${k} · ${ph.name}`;
+  bSub.textContent = `Cycle ${st.cycle} of ${st.cycles}`;
+  bLeft.textContent = mm(st.left) + " left";
+  bNext.textContent = nxt ? `next: ${nxt.name}` : "then analysis";
+  $("demo").innerHTML = `<b>Cycle ${st.cycle}/${st.cycles} · ${k} ${ph.name}</b> · ${mm(st.left)} left · run ${mm(st.elapsed)} of ${mm(st.total)}<br>${PH_INFO[ph.key]}`;
+}
+
 $("bAnalyse").addEventListener("click", () => { S.analyse(s); showAnalysis(); });
 $("bFresh").addEventListener("click", () => { S.freshTraps(s); $("res").textContent = "Fresh acid loaded in AB-507."; });
 $("bOpen").addEventListener("click", () => { S.openReactor(s); });
@@ -508,28 +569,24 @@ const fmt = (v, d) => (Math.abs(v) >= 1e4 ? v.toExponential(1) : v.toFixed(d));
 function showAnalysis() {
   const a = s.analysis; if (!a) return;
   let h = `<table><thead><tr><th>Trap</th><th>Acid</th><th>NH₄⁺-N, mg/L</th><th>NH₃, µmol</th></tr></thead><tbody><tr><td>AB-507</td><td>${a.a1.V.toFixed(0)} mL</td><td class="big">${a.a1.below ? "&lt; LOD" : a.a1.meas.toFixed(3)}</td><td>${a.a1.below ? "—" : a.a1.umol.toFixed(3)}</td></tr></tbody></table>`;
-  if (a.holdMin > 0) h += `<p>Hold ${a.holdMin.toFixed(0)} min. Apparent TOF from the trap: <b class="big">${a.tofApparent > a.tofLOD ? a.tofApparent.toExponential(2) + " s⁻¹" : "not detected"}</b>. Smallest TOF this run could detect: ${a.tofLOD.toExponential(1)} s⁻¹.</p>`;
-  else h += "<p>No hold recorded yet, so no rate can be worked out.</p>";
+  if (a.holdMin > 0) h += `<p>Reaction time ${a.holdMin.toFixed(0)} min. Apparent TOF from the trap: <b class="big">${a.tofApparent > a.tofLOD ? a.tofApparent.toExponential(2) + " s⁻¹" : "not detected"}</b>. Smallest TOF this run could detect: ${a.tofLOD.toExponential(1)} s⁻¹.</p>`;
+  else h += "<p>No reaction time recorded yet, so no rate can be worked out.</p>";
   if (a.slip > 0.05 * Math.max(a.a1.umol, 1e-9) && a.slip > 0.01) h += `<p style="color:#9a5c06">Model: ${a.slip.toFixed(2)} µmol NH₃ went past AB-507 to the vent (not measured, there is no second trap). Release or sweep more slowly.</p>`;
   if (s.liq.ln.acid > 0.5 || s.yLiquid > 0) h += `<p style="color:var(--hot)">Acid was sucked back out of AB-507: this sample is not valid.</p>`;
   $("res").innerHTML = h;
 }
-const SOP = [
-  ["melt", "Heat under Ar", "Clear the air first (evacuate and refill with Ar while cold, feed lines included), then heat with Ar flowing through the headspace and out through NV-401 to the trap until TE-201 shows the melt fully liquid."],
-  ["purge", "Ar through both dip tubes", "Close HV-202 and let Ar build pressure in both feed lines (HV-111 open), then open HV-201 (S1) and HV-205 (S2). Ar bubbles through the melt and leaves through the trap."],
-  ["fill", "H₂ + N₂ through the melt", "Stop Ar, close HV-111. H₂ bubbles through S2 (FIC-101) and N₂ through S1 (FIC-102), first with the outlet open to push the Ar out, then with NV-401 closed until PT-301 reaches the fill pressure."],
-  ["release", "Hold, then out", "Hold for the set time. Then close the inlet valves and open the outlet NV-401: the gas leaves through AB-507."],
-  ["sweep", "Ar sweep", "Ar through both dip tubes again carries what is left into the trap."],
-  ["analyse", "Analyse the trap", "Indophenol on AB-507. Fresh acid for the next loop."]
-];
 function updateSOP() {
-  let first = true;
-  $("sop").innerHTML = SOP.map(([k, t, d]) => {
-    const done = !!s.sop.done[k];
-    const cls = done ? "done" : (first ? "now" : ""); if (!done) first = false;
-    let extra = "";
-    if (k === "release" && s.sop.done.fill && !s.sop.done.release) extra = ` · holding ${((s.t - s.sop.fillT) / 60).toFixed(0)} min`;
-    return `<li class="${cls}"><div><b>${t}</b>${extra}<span>${d}</span></div></li>`;
+  const st = S.programStatus(s);
+  if (!st) {
+    const c = progCfg();
+    $("sop").innerHTML = S.PHASES.map((ph, k) => `<li><i style="background:${PH_COL[ph.key]}"></i><b>${k + 1} · ${ph.name}</b><span>${c.min[ph.key]} min</span><span class="desc">${PH_INFO[ph.key]}</span></li>`).join("");
+    return;
+  }
+  $("sop").innerHTML = st.plan.map((p, k) => {
+    const cls = st.done || k < st.idx ? "done" : k === st.idx ? "now" : "";
+    const n = S.PHASES.findIndex((q) => q.key === p.key) + 1;
+    const right = k === st.idx && !st.done ? `${mm(st.left)} left` : `${p.min} min`;
+    return `<li class="${cls}"><i style="background:${PH_COL[p.key]}"></i><b>Cycle ${p.cycle} · ${n} ${p.name}</b><span>${right}</span>${k === st.idx && !st.done ? `<span class="desc">${PH_INFO[p.key]}</span>` : ""}</li>`;
   }).join("");
 }
 const Vin = () => {   // live U6 terminal values
@@ -570,7 +627,8 @@ function updatePanel() {
   ].map(([a, b, c]) => `<div class="row"><span>${a}</span><span>${b}</span><span>${c}</span></div>`).join("") +
     `<div class="foot"><span>t ${hms(s.t)}</span><span>${s.logs.length} rows</span></div>`;
   $("pClock").textContent = hms(s.t);
-  $("pState").textContent = running ? (demo ? "Auto-run" : "Running") : "Paused";
+  const pst = S.programStatus(s);
+  $("pState").textContent = !running ? "Paused" : pst && !pst.done ? `${pst.phase.name} · ${mm(pst.left)}` : "Running";
   $("pState").className = "pill " + (running ? "run" : "");
   $("pSpeed").textContent = "×" + speed;
   const al = Object.values(s.alarms);
@@ -594,7 +652,7 @@ function updatePanel() {
   const evTop = s.events[s.events.length - 1];
   if (evTop !== lastEv) { lastEv = evTop; $("events").innerHTML = s.events.slice().reverse().map((e) => `<div class="${e.level}"><b>${hms(e.t).slice(0, -3)}</b><span>${e.text}</span></div>`).join(""); }
   $("manual").innerHTML = s.manual.slice().reverse().map((m) => `<tr><td>${hms(m.t).slice(0, -3)}</td><td>${m.PT201.toFixed(1)}</td><td>${m.PT301.toFixed(1)}</td><td>${m.TE201.toFixed(1)}</td><td>${m.TIC}</td><td>${m.FIC101.toFixed(0)}</td><td>${m.FIC102.toFixed(0)}</td><td>${m.FI104}</td></tr>`).join("");
-  if (demo) { const cur = demo[demoIdx]; $("demo").innerHTML = cur ? `Step ${demoIdx + 1} of ${demo.length}, waiting for: <b>${cur.note}</b>` : "Auto-run finished. Results are in the analysis panel."; }
+  updateProgram();
   if (s.analysis && s.analysis.t !== s._shownA) { s._shownA = s.analysis.t; showAnalysis(); }
   // PC screen
   const v = Vin();
@@ -748,18 +806,16 @@ function drawCharts() {
 }
 
 /* ---------------- loop ---------------- */
-modeUI(); refreshToggles(); syncSliders(); meltNote(); drawCharts(); updatePanel(); updateScene(0);
+modeUI(); refreshToggles(); syncSliders(); meltNote(); showTotal(); drawCharts(); updatePanel(); updateScene(0);
 let last = performance.now(), panelT = 0, chartT = 0;
 function frame(now) {
   const rd = Math.min(0.1, (now - last) / 1000); last = now;
   if (running) {
     let left = rd * speed;
     while (left > 1e-9) {
-      if (demo && demoIdx < demo.length && demo[demoIdx].when(s)) { demo[demoIdx].act(s); demoIdx++; continue; }
       const chunk = Math.min(left, 1);
       S.advance(s, chunk); left -= chunk;
     }
-    if (demo && demoIdx >= demo.length) $("bDemoStop").disabled = true;
   }
   updateScene(rd);
   panelT += rd; chartT += rd;
