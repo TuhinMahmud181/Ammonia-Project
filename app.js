@@ -516,6 +516,7 @@ function drawBar(st, c) {
 }
 $("bStart").addEventListener("click", () => {
   const c = progCfg();
+  pace.idx = -1; pace.tSim = null;
   restart();
   S.startProgram(s, c);
   $("bStop").disabled = false; running = true; $("bPlay").textContent = "Pause";
@@ -808,16 +809,29 @@ function drawCharts() {
 /* ---------------- loop ---------------- */
 modeUI(); refreshToggles(); syncSliders(); meltNote(); showTotal(); drawCharts(); updatePanel(); updateScene(0);
 let last = performance.now(), panelT = 0, chartT = 0, wasDone = true;
+const pace = { idx: -1, t0: 0, P: 0, tSim: null };
 function pacing() { const st = S.programStatus(s); return !!(st && !st.done && $("pPace").checked); }
 function frame(now) {
   const rd = Math.min(0.1, (now - last) / 1000); last = now;
   if (running) {
     const st = S.programStatus(s);
-    if (st && !st.done && $("pPace").checked) {   // each phase takes the same real time on screen
-      const secs = Math.max(5, Math.min(120, +$("pPaceS").value || 20));
-      speed = Math.max(1, st.phase.min * 60 / secs);
+    let cap = Infinity;
+    if (st && !st.done && $("pPace").checked) {
+      // every phase takes the same time on screen; while the pressure is changing (filling, pump-down,
+      // release) it plays slowly so the gas can be followed, and the quiet part is compressed at the end
+      const target = Math.max(5, Math.min(120, +$("pPaceS").value || 20));
+      if (pace.idx !== st.idx) { pace.idx = st.idx; pace.t0 = now; }
+      const Q = target - (now - pace.t0) / 1000, R = st.left;
+      const Pnow = S.press(s.N.rx) / 1000;
+      const dPdt = pace.tSim !== null && s.t > pace.tSim ? Math.abs(Pnow - pace.P) / (s.t - pace.tSim) : 0;
+      pace.P = Pnow; pace.tSim = s.t;
+      const active = dPdt > 0.03;                        // kPa per simulated second
+      const even = R / Math.max(Q, 0.05);
+      speed = Q < target * 0.15 ? even : active ? Math.min(even, 12) : even;
+      speed = Math.max(1, speed);
+      cap = R + 0.1;                                     // do not run far past the end of the phase in one frame
     }
-    let left = rd * speed;
+    let left = Math.min(rd * speed, cap + 1e-6);
     while (left > 1e-9) {
       const chunk = Math.min(left, 1);
       S.advance(s, chunk); left -= chunk;

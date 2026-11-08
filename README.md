@@ -15,7 +15,7 @@ Open `index.html` in a browser. It has no dependencies and needs no build step.
   3. **Reaction:** NV-401 is shut. H₂ bubbles through S2 and N₂ through S1 until PT-301 reaches the fill pressure, and the melt is held under that gas for the rest of the phase.
   4. **Release:** all inlets are shut and NV-401 opens slowly.
 
-  By default each phase plays for 20 s on screen whatever its length, so every flow can be followed; the clock stops when the run is complete. An optional final Ar purge sweeps everything into the trap, which is then analysed. HV-202 stays closed. The PSV-301 discharge line only shows flow if the valve lifts on overpressure.
+  By default each phase plays for 20 s on screen whatever its length. Within those 20 s the moving part (pump-down, bubbling fill, release) plays slowly so the gas can be followed, and the quiet hold is compressed at the end; the clock stops when the run is complete. An optional final Ar purge sweeps everything into the trap, which is then analysed. HV-202 stays closed. The PSV-301 discharge line only shows flow if the valve lifts on overpressure.
 - **Compare kinetic hypotheses.** The rig is built to measure the kinetics, so the chemistry is a choice, not a prediction:
   - **A · stable nitride:** a metal nitride forms and is too stable to give NH₃. N₂ uptake shows on PT-301, but the acid stays blank.
   - **B · catalytic:** NH₃ forms at a turnover frequency (TOF) you set, with an Arrhenius term and the NH₃ equilibrium limit.
