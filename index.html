@@ -21,7 +21,7 @@
   --lcd-ink: #b8f07a;
   --h2: #5b4fc4;
   --n2: #2f8a57;
-  --ar: #7d8a8f;
+  --ar: #404e56;
   --nh3: #b0418f;
   --o2: #d98a1c;
   --font-body: "Instrument Sans", "Segoe UI", Roboto, Arial, sans-serif;
@@ -225,9 +225,9 @@ th { font-size: 12px; color: var(--muted); font-weight: 500; }
       </div>
 
       <div class="card">
-        <h2>Auto-run the procedure</h2>
+        <h2>Auto-run one loop</h2>
         <div class="btns">
-          <button class="primary" id="bDemo" type="button">Run the full SOP</button>
+          <button class="primary" id="bDemo" type="button">Run one loop</button>
           <select id="sHold" aria-label="Hold time">
             <option value="30">hold 30 min</option>
             <option value="60" selected>hold 60 min</option>
@@ -235,7 +235,7 @@ th { font-size: 12px; color: var(--muted); font-weight: 500; }
           </select>
           <button id="bDemoStop" type="button" disabled>Stop</button>
         </div>
-        <div class="demo" id="demo">Restarts the run and operates the rig step by step: leak test, three Ar purge cycles, heat, fill N₂ + H₂, hold, release, pump-down, Ar sweep, analysis.</div>
+        <div class="demo" id="demo">Restarts and runs one loop: clear the air, heat under Ar, Ar through both dip tubes, H₂ + N₂ bubbling through the melt, hold, inlets closed and outlet opened, Ar sweep, analysis.</div>
       </div>
 
       <div class="card">

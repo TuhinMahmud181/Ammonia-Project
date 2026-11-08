@@ -315,9 +315,11 @@
         else r = Math.max(r, -rx.n[NH3] * 0.2);
         rx.n[N2] -= r / 2; rx.n[H2] -= 1.5 * r; rx.n[NH3] += r; s.made.nh3 += r;
       } else if (p.mode === "release") {
-        // hypothesis: reactive N–H species build up in the melt under N2 + H2 and come out as NH3 when the pressure drops
+        // hypothesis: reactive N–H species build up in the melt under N2 + H2 and come out as NH3 when the
+        // N2 + H2 pressure over the melt drops (outlet opened, pump-down, or an Ar sweep)
         const Smax = (p.storePct / 100) * s.cat.metal;
-        const Seq = Smax * (Prx2 / (Prx2 + 50000));
+        const pR = (pH2 + pN2) * 1e5;
+        const Seq = Smax * (pR / (pR + 50000));
         const feed = clamp((Math.sqrt(pN2) * Math.pow(pH2, 1.5)) / (Math.sqrt(0.25) * Math.pow(0.75, 1.5)), 0, 1);
         if (s.cat.store < Seq && feed > 0) {
           const r = Math.min((Seq - s.cat.store) / 1200 * contact * feed * arr(50) * dt, rx.n[N2] * 2 * 0.2, rx.n[H2] * (2 / 3) * 0.2);
@@ -370,19 +372,20 @@
         if (lk.state === "pass") s.sop.done.leak = true;
       }
     }
-    // purge cycles: evacuate below 5 kPa, refill above 95 kPa with mostly Ar
+    // run-loop tracking: heat under Ar -> Ar bubbling through S1 + S2 -> H2 + N2 bubbling, outlet closed -> hold -> release
     if (Prx < 5) s.sop.evacuated = true;
-    if (!s.sop.done.purge && s.sop.evacuated && Prx > 95 && frac(N.rx, AR) > 0.5) { s.sop.evacuated = false; s.sop.cycles++; event(s, "info", `Purge cycle ${s.sop.cycles} complete (evacuate + Ar refill).`); }
-    if (!s.sop.done.purge && s.sop.cycles >= 3 && xO2 < 10e-6) { s.sop.done.purge = true; event(s, "ok", "R-201 purged: O₂ below 10 ppm."); }
-    if (!s.sop.done.melt && s.fL >= 1 && s.sop.done.purge) { s.sop.done.melt = true; event(s, "ok", `Melt fully liquid (TE-201 ${TmC.toFixed(0)} °C) under Ar.`); }
-    if (!s.sop.done.fill && s.sop.done.melt && xH2 > 0.6 && frac(N.rx, N2) > 0.15 && Prx > 95) { s.sop.done.fill = true; s.sop.fillT = s.t; event(s, "ok", "R-201 filled with N₂ + H₂."); }
+    if (!s.sop.done.purge && s.sop.evacuated && Prx > 95 && frac(N.rx, AR) > 0.5) { s.sop.evacuated = false; s.sop.cycles++; }
+    if (!s.sop.done.melt && s.fL >= 1) { s.sop.done.melt = true; event(s, "ok", `Melt fully liquid (TE-201 ${TmC.toFixed(0)} °C).`); }
+    const bubAr = s.flows.S1 > 1 && s.flows.S2 > 1 && frac(N.rx, AR) > 0.9;
+    if (!s.sop.done.purge && xO2 < 10e-6 && frac(N.rx, AR) > 0.9 && (bubAr || s.sop.cycles >= 3)) { s.sop.done.purge = true; event(s, "ok", "Ar bubbling through the melt: O₂ in R-201 below 10 ppm."); }
+    if (!s.sop.done.fill && s.sop.done.melt && xH2 > 0.6 && frac(N.rx, N2) > 0.15 && Prx > 95 && v.NV401 === 0) { s.sop.done.fill = true; s.sop.fillT = s.t; event(s, "ok", "Outlet closed with N₂ + H₂ in R-201: hold starts."); }
     if (s.sop.done.fill && !s.sop.done.release && v.NV401 > 0) {
       s.sop.done.release = true;
       s.sop.holdMin = (s.t - s.sop.fillT) / 60;
-      if (Prx * 1000 < PATM + 1500 && !(v.HV601 && v.pump)) event(s, "warn", "NV-401 opened with R-201 near or below atmospheric: risk of suck-back (permissive A29).");
-      else event(s, "ok", `Release started after ${s.sop.holdMin.toFixed(0)} min hold.`);
+      if (Prx * 1000 < PATM + 1500 && !(v.HV601 && v.pump)) event(s, "warn", "Outlet opened with R-201 near or below atmospheric: risk of suck-back (permissive A29).");
+      else event(s, "ok", `Inlets closed, outlet opened after ${s.sop.holdMin.toFixed(0)} min hold: gas leaving through AB-507.`);
     }
-    if (s.sop.done.release && !s.sop.done.sweep && xH2 < 0.01 && frac(N.rx, AR) > 0.9) { s.sop.done.sweep = true; event(s, "ok", "Ar sweep complete: H₂ below 1 % in R-201."); }
+    if (s.sop.done.release && !s.sop.done.sweep && xH2 < 0.01 && frac(N.rx, AR) > 0.9) { s.sop.done.sweep = true; event(s, "ok", "Ar sweep complete: H₂ below 1 % in R-201, the products are in the trap."); }
   }
 
   /* ---------------- sensors, logging ---------------- */
@@ -485,50 +488,42 @@
     event(s, "info", "R-201 opened, spargers cleared, gasket replaced. Reactor is full of air again: leak-test and purge before use.");
   }
 
-  /* scripted demonstration of the run sequence (also used as the self-test) */
-  function demoScript(holdMin) {
+  /* scripted demonstration of one run loop (also used as the self-test) */
+  function demoScript(holdMin, opt) {
+    opt = Object.assign({ arMin: 20, displaceMin: 15, fillKPa: 120, sweepMin: 20 }, opt || {});
     const P = (s) => press(s.N.rx) / 1000;
     const H = holdMin || 60;
     const A = [];
     const add = (note, when, act) => A.push({ note, when, act });
-    const evac = (c) => {
-      add(`Evacuate R-201 and feed lines (cycle ${c}): HV-111 + HV-202 open, HV-601 open, P-601 on, crack NV-401 to 8 %`,
-        () => true, (s) => { s.sp.FI104 = 0; s.v.cylAr = false; s.v.HV111 = true; s.v.HV202 = true; s.v.HV601 = true; s.v.pump = true; s.v.NV401 = 8; });
-      add("Below 30 kPa: NV-401 to 20 %", (s) => P(s) < 30, (s) => { s.v.NV401 = 20; });
-      add("Below 3 kPa: open NV-401 fully", (s) => P(s) < 3, (s) => { s.v.NV401 = 100; });
-      if (c === 1) {
-        add("Below 1 kPa: close NV-401 and HV-202, leak-up test for 5 min", (s) => P(s) < 1, (s) => { s.v.NV401 = 0; s.v.HV202 = false; s.v.HV111 = false; });
-        add("Leak test done: refill with Ar through the feed lines (Ar 300 sccm, HV-111 + HV-202)", (s) => s.sop.leak.state === "pass" || s.sop.leak.state === "fail",
-          (s) => { s.v.cylAr = true; s.sp.FI104 = 300; s.v.HV111 = true; s.v.HV202 = true; });
-      } else {
-        add("Below 1 kPa: close NV-401, refill with Ar 300 sccm", (s) => P(s) < 1, (s) => { s.v.NV401 = 0; s.v.cylAr = true; s.sp.FI104 = 300; });
-      }
-    };
-    evac(1);
-    add("Above 103 kPa: stop Ar", (s) => P(s) > 103, (s) => { s.sp.FI104 = 0; });
-    evac(2);
-    add("Above 103 kPa: stop Ar", (s) => P(s) > 103, (s) => { s.sp.FI104 = 0; });
-    evac(3);
-    add("Purged: close HV-601 then stop P-601; Ar 50 sccm through R-201 to the traps (NV-401 30 %); furnace on, SP 220 °C",
-      (s) => P(s) > 103, (s) => { s.v.HV111 = false; s.v.HV601 = false; s.v.pump = false; s.sp.FI104 = 50; s.v.NV401 = 30; s.v.furnace = true; s.sp.furnaceSP = 220; });
-    add("Melt liquid: stop Ar, close HV-202, evacuate the hot reactor (crack NV-401 to 8 %)",
-      (s) => s.fL >= 1 && s.th.Tm - 273.15 > 185, (s) => { s.sp.FI104 = 0; s.v.cylAr = false; s.v.HV202 = false; s.v.HV601 = true; s.v.pump = true; s.v.NV401 = 8; });
+    add("Cold purge: evacuate R-201 and the feed lines (HV-111 + HV-202 open, HV-601 open, P-601 on, NV-401 8 %)",
+      () => true, (s) => { s.v.HV111 = true; s.v.HV202 = true; s.v.HV601 = true; s.v.pump = true; s.v.NV401 = 8; });
     add("Below 30 kPa: NV-401 to 20 %", (s) => P(s) < 30, (s) => { s.v.NV401 = 20; });
-    add("Below 3 kPa: open NV-401 fully", (s) => P(s) < 3, (s) => { s.v.NV401 = 100; });
-    add("Below 1 kPa: close NV-401, close HV-601, stop P-601; feed N₂ 25 + H₂ 75 sccm through sparger S1 (HV-111, HV-201)",
-      (s) => P(s) < 1, (s) => { s.v.NV401 = 0; s.v.HV601 = false; s.v.pump = false; s.v.cylN2 = true; s.v.cylH2 = true; s.v.XV101 = true; s.v.HV111 = true; s.sp.FIC101 = 75; s.sp.FIC102 = 25; s.v.HV201 = true; });
-    add("PT-301 at 108 kPa: stop both MFCs, then close HV-201, HV-111, XV-101 and cylinders; hold starts",
-      (s) => P(s) > 108, (s) => { s.sp.FIC101 = 0; s.sp.FIC102 = 0; s._hold = s.t; s._close = true; });
-    add("Feed lines settled: close HV-201, HV-111, XV-101, cylinders", (s) => s.t - s._hold > 20,
-      (s) => { s.v.HV201 = false; s.v.HV111 = false; s.v.XV101 = false; s.v.cylH2 = false; s.v.cylN2 = false; });
-    add(`Hold ${H} min done: release to the traps, NV-401 at 10 %`, (s) => s.t - s._hold >= H * 60, (s) => { s.v.NV401 = 10; });
-    add("Near atmospheric: pump down through the traps (HV-601 open, P-601 on)", (s) => P(s) < 103, (s) => { s.v.HV601 = true; s.v.pump = true; });
+    add("Below 2 kPa: close NV-401, close HV-601, stop P-601; refill with Ar 300 sccm", (s) => P(s) < 2,
+      (s) => { s.v.NV401 = 0; s.v.HV601 = false; s.v.pump = false; s.v.cylAr = true; s.sp.FI104 = 300; s._evac = (s._evac || 0) + 1; });
+    add("Second cycle: evacuate again", (s) => P(s) > 102, (s) => { s.sp.FI104 = 0; s.v.HV601 = true; s.v.pump = true; s.v.NV401 = 8; });
     add("Below 30 kPa: NV-401 to 20 %", (s) => P(s) < 30, (s) => { s.v.NV401 = 20; });
-    add("Below 2 kPa: close NV-401, then HV-601, then stop P-601", (s) => P(s) < 2, (s) => { s.v.NV401 = 0; s.v.HV601 = false; s.v.pump = false; });
-    add("Refill with Ar 300 sccm through the headspace (HV-202)", () => true, (s) => { s.v.cylAr = true; s.sp.FI104 = 300; s.v.HV202 = true; });
-    add("Above 108 kPa: open NV-401 to 40 %, sweep Ar 150 sccm for 15 min", (s) => P(s) > 108, (s) => { s.v.NV401 = 40; s.sp.FI104 = 150; s._sw = s.t; });
-    add("Sweep done: stop Ar, close HV-202 and NV-401, analyse the traps", (s) => s.t - s._sw > 900,
-      (s) => { s.sp.FI104 = 0; s.v.cylAr = false; s.v.HV202 = false; s.v.NV401 = 0; analyse(s); });
+    add("Below 2 kPa: close NV-401, close HV-601, stop P-601; refill with Ar 300 sccm", (s) => P(s) < 2,
+      (s) => { s.v.NV401 = 0; s.v.HV601 = false; s.v.pump = false; s.sp.FI104 = 300; });
+    add("Heat under Ar: furnace on (SP 220 °C), Ar 100 sccm through the headspace (HV-202) and out through NV-401 to the trap",
+      (s) => P(s) > 102, (s) => { s.v.HV111 = false; s.sp.FI104 = 100; s.v.NV401 = 40; s.v.furnace = true; s.sp.furnaceSP = 220; });
+    add("Melt liquid: close HV-202 and open HV-111 so the Ar builds pressure in both feed lines",
+      (s) => s.fL >= 1 && s.th.Tm - 273.15 > 185, (s) => { s.v.HV202 = false; s.v.HV111 = true; s.sp.FI104 = 150; });
+    add(`Feed lines above R-201 pressure: open HV-201 (S1) and HV-205 (S2); Ar bubbles through both dip tubes and out to the trap for ${opt.arMin} min`,
+      (s) => press(s.N.hdr) > press(s.N.rx) + 3000 && press(s.N.h2l) > press(s.N.rx) + 3000, (s) => { s.v.HV201 = true; s.v.HV205 = true; s._ar = s.t; });
+    add("Ar done: stop Ar, close HV-111. H₂ 75 sccm bubbles through S2 and N₂ 25 sccm through S1, outlet still open to push the Ar out",
+      (s) => s.t - s._ar >= opt.arMin * 60, (s) => { s.sp.FI104 = 0; s.v.cylAr = false; s.v.HV111 = false; s.v.cylH2 = true; s.v.XV101 = true; s.sp.FIC101 = 75; s.v.cylN2 = true; s.sp.FIC102 = 25; s._dsp = s.t; });
+    add(`After ${opt.displaceMin} min: close the outlet NV-401; H₂ and N₂ keep bubbling until PT-301 reaches ${opt.fillKPa} kPa`,
+      (s) => s.t - s._dsp >= opt.displaceMin * 60, (s) => { s.v.NV401 = 0; });
+    add(`PT-301 at ${opt.fillKPa} kPa: MFCs to zero, hold ${H} min with the melt under N₂ + H₂`,
+      (s) => P(s) >= opt.fillKPa, (s) => { s.sp.FIC101 = 0; s.sp.FIC102 = 0; s._hold = s.t; });
+    add(`Hold ${H} min done: close the inlet valves (HV-201, HV-205, XV-101, cylinders), open the outlet NV-401 to 40 %`,
+      (s) => s.t - s._hold >= H * 60, (s) => { s.v.HV201 = false; s.v.HV205 = false; s.v.XV101 = false; s.v.cylH2 = false; s.v.cylN2 = false; s.v.NV401 = 40; s._rel = s.t; });
+    add("Pressure down: Ar 150 sccm into the header, HV-111 open, so both feed lines build pressure again",
+      (s) => P(s) < 103 && s.t - s._rel > 60, (s) => { s.v.cylAr = true; s.sp.FI104 = 150; s.v.HV111 = true; });
+    add(`Feed lines above R-201 pressure: open HV-201 and HV-205; Ar bubbles through S1 and S2 for ${opt.sweepMin} min, sweeping everything into AB-507`,
+      (s) => press(s.N.hdr) > press(s.N.rx) + 3000 && press(s.N.h2l) > press(s.N.rx) + 3000, (s) => { s.v.HV201 = true; s.v.HV205 = true; s._sw = s.t; });
+    add("Sweep done: stop Ar, close the dip-tube valves and the outlet, analyse AB-507",
+      (s) => s.t - s._sw >= opt.sweepMin * 60, (s) => { s.sp.FI104 = 0; s.v.cylAr = false; s.v.HV111 = false; s.v.HV201 = false; s.v.HV205 = false; s.v.NV401 = 0; analyse(s); });
     return A;
   }
 

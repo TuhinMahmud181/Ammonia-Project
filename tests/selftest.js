@@ -1,4 +1,4 @@
-// Headless self-test: runs the scripted procedure under each kinetic hypothesis
+// Headless self-test: runs one scripted loop under each kinetic hypothesis
 // and a few HAZOP deviations, and prints the outcome.  Usage: node tests/selftest.js
 const S = require("../sim.js");
 const P = (s) => S.press(s.N.rx) / 1000;
@@ -15,8 +15,11 @@ for (const mode of ["nitride", "tof", "release"]) {
   const r = S.readings(s), a = s.analysis;
   ok(finished, `${mode}: procedure completes (${(s.t / 60).toFixed(0)} min)`);
   ok(Object.values(s.alarms).length === 0, `${mode}: no alarms left active`);
-  const balance = Math.abs(r.made - r.cap1 - r.slip) <= 0.05 * r.made + 0.05;
-  ok(balance, `${mode}: NH3 made ${r.made.toFixed(2)} µmol, caught ${r.cap1.toFixed(2)} µmol, slipped to vent ${r.slip.toFixed(3)} µmol`);
+  const inGas = Object.values(s.N).reduce((a, nd) => a + (nd.atm ? 0 : nd.n[3]), 0) * 1e6;
+  const balance = Math.abs(r.made - r.cap1 - r.slip - inGas) <= 0.02 * r.made + 0.05;
+  ok(balance, `${mode}: NH3 made ${r.made.toFixed(2)} µmol = trap ${r.cap1.toFixed(2)} + vent ${r.slip.toFixed(3)} + still in gas ${inGas.toFixed(2)}`);
+  ok(!s.events.some((e) => e.level === "warn" || e.level === "alarm"), `${mode}: the loop raises no warnings`);
+  ok(!s.events.some((e) => e.text.includes("PSV-301 lifting")), `${mode}: PSV-301 stays shut`);
   console.log(`      AB-507 ${a.a1.below ? "<LOD" : a.a1.meas.toFixed(3)} mg N/L, apparent TOF ${a.tofApparent.toExponential(2)}, LOD TOF ${a.tofLOD.toExponential(1)}`);
 }
 { const s = S.create(); s.v.HV601 = true; s.v.pump = true; s.v.NV401 = 20;

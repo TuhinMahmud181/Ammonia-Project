@@ -31,7 +31,7 @@ function txt(x, y, str, cls, parent, anchor, style) {
 const mk = (tag) => { const g = document.createElementNS(NS, tag); svg.appendChild(g); return g; };
 const gBack = mk("g"), gWire = mk("g"), gPipe = mk("g"), gFront = mk("g"), gBub = mk("g");
 
-const C = { H2: [91, 79, 196], N2: [47, 138, 87], Ar: [125, 138, 143], NH3: [176, 65, 143], O2: [217, 138, 28] };
+const C = { H2: [91, 79, 196], N2: [47, 138, 87], Ar: [64, 78, 86], NH3: [176, 65, 143], O2: [217, 138, 28] };
 function gasColour(x) {
   const w = [x[0], x[1] - (x[4] > 0.01 ? x[4] * 3.7 : 0), x[2], x[3] * 30, x[4] * 4.7].map((v) => Math.max(0, v));
   const tot = w.reduce((a, b) => a + b, 0) || 1;
@@ -66,13 +66,14 @@ pipe("M620 300 H765 V588", "hdr", () => s.flows.S1);
 pipe("M620 300 V220 H812 V385", "hdr", () => s.flows.HV202);
 // outlet
 pipe("M860 352 V170 H1010", "rx", () => s.flows.NV401 + s.flows.psv);
-pipe("M950 170 V45", "rx", () => s.flows.psv);
-pipe("M950 45 H1478", "vent", () => s.flows.psv + s.flows.vent);
+pipe("M950 170 V128", "rx", () => s.flows.psv);
+pipe("M950 102 V45 H1274", "psvout", () => s.flows.psv);
+pipe("M1274 45 H1478", "vent", () => s.flows.psv + s.flows.vent);
 pipe("M1010 170 H1170", "y", () => s.flows.CV505);
 pipe("M1060 170 V262 H1093", "y", () => s.flows.pump);
 pipe("M1137 262 H1170 V170", "ln", () => s.flows.pump);
 pipe("M1170 170 H1248 V326", "ln", () => s.flows.CV505 + s.flows.pump);
-pipe("M1274 200 V45", "a1", () => s.flows.vent);
+pipe("M1274 200 V45", "trapout", () => s.flows.vent);
 el("path", { d: "M1476 37 L1494 45 L1476 53 Z", fill: "var(--ink)" });
 txt(1490, 28, "To outdoors, above head height", "small", null, "end");
 
@@ -506,13 +507,12 @@ function showAnalysis() {
   $("res").innerHTML = h;
 }
 const SOP = [
-  ["leak", "Leak-up test", "Evacuate R-201 below 10 kPa, isolate it (NV-401 and inlets shut) and watch PT-301 for 5 min: rise under 0.1 kPa/min."],
-  ["purge", "Purge with Ar", "Three cycles of evacuate and refill with Ar, feed lines included (HV-111, HV-202), until O₂ is below 10 ppm."],
-  ["melt", "Melt under Ar", "Heat with a little Ar flowing out through the trap (NV-401 cracked) so the warming gas has somewhere to go. Wait for TE-201 to show the melt fully liquid."],
-  ["fill", "Fill N₂ + H₂", "Evacuate the hot reactor, then feed N₂ 25 + H₂ 75 sccm through sparger S1 (HV-201) until PT-301 is just above atmospheric."],
-  ["release", "Hold, then release", "Hold isolated for the set time. Release through NV-401 only while PT-301 is above atmospheric, then pump down through the trap."],
-  ["sweep", "Ar sweep", "Close NV-401, close HV-601, then stop P-601. Refill with Ar above atmospheric and sweep it through the trap."],
-  ["analyse", "Analyse the trap", "Indophenol on AB-507. Fresh acid for the next run."]
+  ["melt", "Heat under Ar", "Clear the air first (evacuate and refill with Ar while cold, feed lines included), then heat with Ar flowing through the headspace and out through NV-401 to the trap until TE-201 shows the melt fully liquid."],
+  ["purge", "Ar through both dip tubes", "Close HV-202 and let Ar build pressure in both feed lines (HV-111 open), then open HV-201 (S1) and HV-205 (S2). Ar bubbles through the melt and leaves through the trap."],
+  ["fill", "H₂ + N₂ through the melt", "Stop Ar, close HV-111. H₂ bubbles through S2 (FIC-101) and N₂ through S1 (FIC-102), first with the outlet open to push the Ar out, then with NV-401 closed until PT-301 reaches the fill pressure."],
+  ["release", "Hold, then out", "Hold for the set time. Then close the inlet valves and open the outlet NV-401: the gas leaves through AB-507."],
+  ["sweep", "Ar sweep", "Ar through both dip tubes again carries what is left into the trap."],
+  ["analyse", "Analyse the trap", "Indophenol on AB-507. Fresh acid for the next loop."]
 ];
 function updateSOP() {
   let first = true;
@@ -520,8 +520,6 @@ function updateSOP() {
     const done = !!s.sop.done[k];
     const cls = done ? "done" : (first ? "now" : ""); if (!done) first = false;
     let extra = "";
-    if (k === "leak") extra = s.sop.leak.state === "run" ? ` · running ${((s.t - s.sop.leak.t0) / 60).toFixed(1)} min` : s.sop.leak.state === "fail" ? " · FAILED" : "";
-    if (k === "purge") extra = ` · ${s.sop.cycles} cycle${s.sop.cycles === 1 ? "" : "s"}`;
     if (k === "release" && s.sop.done.fill && !s.sop.done.release) extra = ` · holding ${((s.t - s.sop.fillT) / 60).toFixed(0)} min`;
     return `<li class="${cls}"><div><b>${t}</b>${extra}<span>${d}</span></div></li>`;
   }).join("");
@@ -615,9 +613,12 @@ function updateScene(rd) {
   lines.forEach((L) => {
     let col = "#c4cdcf", vac = false;
     if (L.nodeKey in supply) { if (supply[L.nodeKey]) col = gasColour(supply[L.nodeKey]); }
-    else if (L.nodeKey === "vent") col = gasColour([0, 0.78, 0.01, 0, 0.21]);
-    else { col = gasColour(comp(L.nodeKey)); vac = S.press(N[L.nodeKey]) < 20000; }
     const f = L.flowFn ? L.flowFn() : 0;
+    let empty = false;
+    if (L.nodeKey === "psvout") { if (f > 0.3) col = gasColour(comp("rx")); else empty = true; }
+    else if (L.nodeKey === "vent") { if (f > 0.3) col = gasColour(s.flows.psv > 0.3 ? comp("rx") : comp("a1")); else empty = true; }
+    else if (L.nodeKey === "trapout") { if (f > 0.3) col = gasColour(comp("a1")); else empty = true; }
+    else if (!(L.nodeKey in supply)) { col = gasColour(comp(L.nodeKey)); vac = S.press(N[L.nodeKey]) < 20000; }
     L.gas.setAttribute("stroke", col);
     if (Math.abs(f) > 0.3) {
       L.gas.setAttribute("stroke-dasharray", "7 9"); L.gas.setAttribute("opacity", 0.95);
@@ -626,7 +627,7 @@ function updateScene(rd) {
       L.gas.setAttribute("stroke-dashoffset", L.off);
     } else {
       L.gas.setAttribute("stroke-dasharray", vac ? "2 6" : "");
-      L.gas.setAttribute("opacity", vac ? 0.35 : (L.nodeKey in supply && !supply[L.nodeKey]) ? 0.4 : 0.55);
+      L.gas.setAttribute("opacity", empty ? 0 : vac ? 0.35 : (L.nodeKey in supply && !supply[L.nodeKey]) ? 0.4 : 0.55);
     }
   });
   ["cylH2", "cylN2", "cylAr"].forEach((k) => { cyl[k].ind.setAttribute("fill", s.v[k] ? "var(--ok)" : "#fff"); cyl[k].st.textContent = s.v[k] ? "open" : "shut"; });
@@ -730,7 +731,7 @@ function drawCharts() {
   chart("c3", "lg3", [
     { name: "H₂", color: "#5b4fc4", data: thin((r) => r.xH2 * 100) },
     { name: "N₂", color: "#2f8a57", data: thin((r) => r.xN2 * 100) },
-    { name: "Ar", color: "#7d8a8f", data: thin((r) => r.xAr * 100) },
+    { name: "Ar", color: "#404e56", data: thin((r) => r.xAr * 100) },
     { name: "O₂", color: "#d98a1c", data: thin((r) => r.xO2 * 100) }
   ], { unit: "mol %", min: 0, max: 100 });
   chart("c4", "lg4", [
