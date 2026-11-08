@@ -10,7 +10,7 @@ let s = S.create({});
 let running = true, speed = 60, demo = null, demoIdx = 0, anim = 0;
 const params = () => ({
   mode: $("sMode").value, logTOF: +$("iTOF").value, Ea: +$("iEa").value, storePct: +$("iStore").value,
-  nitrideTau: +$("iTau").value, ybAt: +$("iYb").value, meltMass: +$("iMass").value,
+  nitrideTau: +$("iTau").value, actPct: +$("iAct").value, meltMass: +$("iMass").value,
   fLeak: $("fLeak").checked, fCV505: $("fCV505").checked, fFIC101: $("fFIC101").checked, fPower: $("fPower").checked
 });
 const powerOK = () => !s.p.fPower && !s.v.esd;
@@ -360,7 +360,7 @@ function popHTML(id) {
   if (id === "FIC-102") return head("FIC-102 · N₂ MFC") + `<div class="st">Set point from U6 DAC1; flow read back on AIN5.</div>` + rng("sp", "Set point", 0, 100, 1, s.sp.FIC102, "sccm") + `<div class="live" id="poLive"></div>`;
   if (id === "FI-104") return head("FI-104 · Ar rotameter") + `<div class="st">Manual needle on the rotameter. Not logged.</div>` + rng("sp", "Flow", 0, 500, 5, s.sp.FI104, "sccm") + `<div class="live" id="poLive"></div>`;
   if (id === "furnace") return head("H-201 furnace") + `<div class="st">Stand-alone furnace controller TIC-201. TE-201 in the melt reads lower than the furnace.</div><div class="row2"><button type="button" data-set="1" class="${s.v.furnace ? "on" : ""}">On</button><button type="button" data-set="0" class="${s.v.furnace ? "" : "on"}">Off</button></div>` + rng("sp", "Set point", 25, 600, 5, s.sp.furnaceSP, "°C") + `<div class="live" id="poLive"></div>`;
-  if (id === "melt") return head("Catalyst in R-201") + `<div class="st">Yb–Bi–Sn melt in the MgO crucible. Bi:Sn kept at 57:38.</div>` + rng("mass", "Charge", 10, 150, 5, s.p.meltMass, "g") + rng("yb", "Yb", 0, 10, 0.5, s.p.ybAt, "at%") + `<div class="live" id="poLive"></div>`;
+  if (id === "melt") return head("Catalyst in R-201") + `<div class="st">Liquid-metal catalyst in the MgO crucible.</div>` + rng("mass", "Charge", 10, 150, 5, s.p.meltMass, "g") + rng("act", "Active metal", 0, 10, 0.5, s.p.actPct, "at%") + `<div class="live" id="poLive"></div>`;
   return head(id);
 }
 function wirePop(id) {
@@ -378,9 +378,9 @@ function wirePop(id) {
   if (id === "FI-104") bind("sp", (v) => { s.sp.FI104 = v; }, "sccm");
   if (id === "furnace") bind("sp", (v) => { s.sp.furnaceSP = v; }, "°C");
   if (id === "melt") {
-    const apply = () => { const m = +$("pi_mass").value, y = +$("pi_yb").value; $("iMass").value = m; $("iYb").value = y; setCatalyst(); };
-    $("pi_mass").addEventListener("change", apply); $("pi_yb").addEventListener("change", apply);
-    bind("mass", () => {}, "g"); bind("yb", () => {}, "at%", 1);
+    const apply = () => { const m = +$("pi_mass").value, y = +$("pi_act").value; $("iMass").value = m; $("iAct").value = y; setCatalyst(); };
+    $("pi_mass").addEventListener("change", apply); $("pi_act").addEventListener("change", apply);
+    bind("mass", () => {}, "g"); bind("act", () => {}, "at%", 1);
   }
   livePop();
 }
@@ -394,7 +394,7 @@ function livePop() {
   else if (id === "FIC-102") t = `PV ${f.FIC102.toFixed(1)} sccm · DAC1 ${(s.sp.FIC102 / 20).toFixed(2)} V · AIN5 ${(f.FIC102 / 20).toFixed(3)} V`;
   else if (id === "FI-104") t = `${f.FI104.toFixed(0)} sccm Ar into the header`;
   else if (id === "furnace") t = `PV ${(s.th.Tf - 273.15).toFixed(0)} °C · heater ${(s.th.Pw / 1000).toFixed(2)} kW · melt ${(s.th.Tm - 273.15).toFixed(0)} °C`;
-  else if (id === "melt") t = `${(s.melt.nYb * 1000).toFixed(2)} mmol Yb · depth ${(s.melt.depth * 1000).toFixed(1)} mm · ${meltState()}`;
+  else if (id === "melt") t = `${(s.melt.nAct * 1000).toFixed(2)} mmol active metal · depth ${(s.melt.depth * 1000).toFixed(1)} mm · ${meltState()}`;
   else if (id === "pump") t = `${f.pump.toFixed(0)} sccm · suction ${(S.press(s.N.y) / 1000).toFixed(1)} kPa`;
   else if (id === "HV-201") t = `S1 ${f.S1.toFixed(1)} sccm · PT-201 ${(S.press(s.N.hdr) / 1000).toFixed(1)} kPa`;
   else if (id === "HV-205") t = `S2 ${f.S2.toFixed(1)} sccm`;
@@ -429,19 +429,19 @@ const SL = [
   ["iEa", "oEa", (v) => { s.p.Ea = v; return v + " kJ/mol"; }],
   ["iStore", "oStore", (v) => { s.p.storePct = v; return v.toFixed(1) + " %"; }],
   ["iTau", "oTau", (v) => { s.p.nitrideTau = v; return v + " min"; }],
-  ["iYb", "oYb", (v) => v.toFixed(1) + " at%"],
+  ["iAct", "oAct", (v) => v.toFixed(1) + " at%"],
   ["iMass", "oMass", (v) => v + " g"]
 ];
 SL.forEach(([i, o, f]) => { $(i).addEventListener("input", () => { $(o).textContent = f(+$(i).value); }); });
 SL.slice(5).forEach(([i, o, f]) => { $(o).textContent = f(+$(i).value); });
 function setCatalyst() {
-  S.setMelt(s, +$("iMass").value, +$("iYb").value);
-  $("oMass").textContent = $("iMass").value + " g"; $("oYb").textContent = (+$("iYb").value).toFixed(1) + " at%";
+  S.setMelt(s, +$("iMass").value, +$("iAct").value);
+  $("oMass").textContent = $("iMass").value + " g"; $("oAct").textContent = (+$("iAct").value).toFixed(1) + " at%";
   meltNote();
 }
-function meltNote() { $("oMelt").textContent = `${(s.melt.nYb * 1000).toFixed(2)} mmol Yb, melt about ${(s.melt.depth * 1000).toFixed(1)} mm deep. Bi:Sn kept at 57:38; 0 % Yb gives a Bi–Sn blank.`; }
+function meltNote() { $("oMelt").textContent = `${(s.melt.nAct * 1000).toFixed(2)} mmol active metal, melt about ${(s.melt.depth * 1000).toFixed(1)} mm deep. 0 % active metal gives a host-only blank.`; }
 $("iMass").addEventListener("change", setCatalyst);
-$("iYb").addEventListener("change", setCatalyst);
+$("iAct").addEventListener("change", setCatalyst);
 function syncSliders() {
   const set = (id, v) => { if (document.activeElement !== $(id)) $(id).value = v; };
   set("iFIC101", s.sp.FIC101); set("iFIC102", s.sp.FIC102); set("iFI104", s.sp.FI104); set("iNV", s.v.NV401); set("iTsp", s.sp.furnaceSP);
@@ -449,8 +449,8 @@ function syncSliders() {
   $("oNV").textContent = s.v.NV401 + " %"; $("oTsp").textContent = s.sp.furnaceSP + " °C";
 }
 const MODE_NOTE = {
-  nitride: "YbN forms from N₂ and is too stable for H₂ to reduce: PT-301 falls as N₂ is taken up, but the acid stays blank.",
-  tof: "Melt makes NH₃ catalytically at the TOF you set (per Yb atom, at 200 °C), with Arrhenius scaling and the NH₃ equilibrium limit. Sparging gives full gas contact; a static hold only the melt surface.",
+  nitride: "A metal nitride forms from N₂ and is too stable for H₂ to reduce: PT-301 falls as N₂ is taken up, but the acid stays blank.",
+  tof: "Melt makes NH₃ catalytically at the TOF you set (per active-metal atom, at 200 °C), with Arrhenius scaling and the NH₃ equilibrium limit. Sparging gives full gas contact; a static hold only the melt surface.",
   release: "Hypothesis from the reported observation: reactive N–H species build up under N₂ + H₂ and leave as NH₃ when the pressure is reduced (release step / pump-down)."
 };
 function modeUI() {
@@ -499,7 +499,7 @@ const fmt = (v, d) => (Math.abs(v) >= 1e4 ? v.toExponential(1) : v.toFixed(d));
 function showAnalysis() {
   const a = s.analysis; if (!a) return;
   let h = `<table><thead><tr><th>Trap</th><th>Acid</th><th>NH₄⁺-N, mg/L</th><th>NH₃, µmol</th></tr></thead><tbody><tr><td>AB-507</td><td>${a.a1.V.toFixed(0)} mL</td><td class="big">${a.a1.below ? "&lt; LOD" : a.a1.meas.toFixed(3)}</td><td>${a.a1.below ? "—" : a.a1.umol.toFixed(3)}</td></tr></tbody></table>`;
-  if (a.holdMin > 0) h += `<p>Hold ${a.holdMin.toFixed(0)} min over ${(a.nYb * 1e3).toFixed(2)} mmol Yb. Apparent TOF from the trap: <b class="big">${a.tofApparent > a.tofLOD ? a.tofApparent.toExponential(2) + " s⁻¹" : "not detected"}</b>. Smallest TOF this run could detect: ${a.tofLOD.toExponential(1)} s⁻¹.</p>`;
+  if (a.holdMin > 0) h += `<p>Hold ${a.holdMin.toFixed(0)} min over ${(a.nAct * 1e3).toFixed(2)} mmol active metal. Apparent TOF from the trap: <b class="big">${a.tofApparent > a.tofLOD ? a.tofApparent.toExponential(2) + " s⁻¹" : "not detected"}</b>. Smallest TOF this run could detect: ${a.tofLOD.toExponential(1)} s⁻¹.</p>`;
   else h += "<p>No hold recorded yet, so no rate can be worked out.</p>";
   if (a.slip > 0.05 * Math.max(a.a1.umol, 1e-9) && a.slip > 0.01) h += `<p style="color:#9a5c06">Model: ${a.slip.toFixed(2)} µmol NH₃ went past AB-507 to the vent (not measured, there is no second trap). Release or sweep more slowly.</p>`;
   if (s.liq.ln.acid > 0.5 || s.yLiquid > 0) h += `<p style="color:var(--hot)">Acid was sucked back out of AB-507: this sample is not valid.</p>`;
@@ -584,8 +584,8 @@ function updatePanel() {
   $("kMadeN").textContent = s.p.mode === "nitride" ? `N₂ taken up ${fmt(r.n2up, 1)} µmol` : `in gas now ${r.nh3ppm.toFixed(0)} ppm`;
   $("kCap").innerHTML = fmt(r.cap1, 2) + "<small>µmol</small>";
   $("kCapN").textContent = `slipped to vent ${fmt(r.slip, 3)} µmol (model)`;
-  $("kYb").innerHTML = (s.melt.nYb > 0 ? r.ybMetal.toFixed(1) : "—") + "<small>%</small>";
-  $("kYbN").textContent = s.melt.nYb > 0 ? `oxide ${(s.yb.oxide / s.melt.nYb * 100).toFixed(1)} % · nitride ${(s.yb.nitride / s.melt.nYb * 100).toFixed(1)} %` : "Bi–Sn blank";
+  $("kAct").innerHTML = (s.melt.nAct > 0 ? r.actMetal.toFixed(1) : "—") + "<small>%</small>";
+  $("kActN").textContent = s.melt.nAct > 0 ? `oxide ${(s.cat.oxide / s.melt.nAct * 100).toFixed(1)} % · nitride ${(s.cat.nitride / s.melt.nAct * 100).toFixed(1)} %` : "host-only blank";
   updateSOP(); updateWiring(); livePop();
   const evTop = s.events[s.events.length - 1];
   if (evTop !== lastEv) { lastEv = evTop; $("events").innerHTML = s.events.slice().reverse().map((e) => `<div class="${e.level}"><b>${hms(e.t).slice(0, -3)}</b><span>${e.text}</span></div>`).join(""); }
@@ -652,7 +652,7 @@ function updateScene(rd) {
   meltSurf.setAttribute("y1", 601 - depthPx); meltSurf.setAttribute("y2", 601 - depthPx);
   melt.setAttribute("fill", s.fL >= 1 ? `rgb(${Math.round(150 + 80 * hot)},${Math.round(160 - 30 * hot)},${Math.round(170 - 80 * hot)})` : s.fL > 0 ? "#9fa6aa" : "#8a8f93");
   meltSurf.setAttribute("stroke", s.fL > 0 ? "#e6ecee" : "#a7aeb2");
-  meltLab.textContent = `${s.p.meltMass} g Yb–Bi–Sn · ${s.p.ybAt} at% Yb · ${meltState()}`;
+  meltLab.textContent = `${s.p.meltMass} g catalyst · ${s.p.actPct} at% active · ${meltState()}`;
   headspace.setAttribute("fill", gasColour(comp("rx")));
   headspace.setAttribute("opacity", Math.min(0.35, S.press(N.rx) / 101325 * 0.3));
   plugMark.S1.textContent = s.spg.S1.plugged ? "S1 plugged" : ""; plugMark.S2.textContent = s.spg.S2.plugged ? "S2 plugged" : "";

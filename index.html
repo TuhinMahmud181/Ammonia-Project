@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ammonia Kinetics Rig · Virtual Lab</title>
-<meta name="description" content="Interactive simulation of a bench-scale liquid-metal (Yb–Bi–Sn) ammonia synthesis kinetics rig, from gas cylinders to vent, following the rig P&ID.">
+<meta name="description" content="Interactive simulation of a bench-scale liquid-metal catalyst ammonia synthesis kinetics rig, from gas cylinders to vent, following the rig P&ID.">
 <style>
 :root {
   /* Same lab-bench instrument-panel language as the ZLDD virtual lab. */
@@ -171,7 +171,7 @@ th { font-size: 12px; color: var(--muted); font-weight: 500; }
     <div>
       <div class="back"><a href="https://tuhinmahmud181.github.io/">← Tuhin Mahmud</a></div>
       <h1>Ammonia Kinetics Rig · Virtual Lab</h1>
-      <p>Bench rig for measuring ammonia synthesis over a molten Yb–Bi–Sn catalyst, from the gas cylinders to the vent, drawn from the rig P&amp;ID (PID-002, simplified). Open the valves, run the furnace, purge, fill, hold, release through the acid traps, and analyse what was caught.</p>
+      <p>Bench rig for measuring ammonia synthesis over a liquid-metal catalyst, from the gas cylinders to the vent, drawn from the rig P&amp;ID (PID-002, simplified). Open the valves, run the furnace, purge, fill, hold, release through the acid traps, and analyse what was caught.</p>
       <p class="byline">Tuhin Mahmud · Department of Chemical Engineering, BUET</p>
     </div>
     <div class="pills">
@@ -243,9 +243,9 @@ th { font-size: 12px; color: var(--muted); font-weight: 500; }
         <div class="ctl">
           <label for="iMass">Catalyst charge (melt mass) <output id="oMass"></output>
             <input type="range" id="iMass" min="10" max="150" step="5" value="50"></label>
-          <label for="iYb">Yb in the melt <output id="oYb"></output>
-            <input type="range" id="iYb" min="0" max="10" step="0.5" value="5">
-            <span class="sub" id="oMelt">Bi:Sn kept at 57:38. 0 % gives a Bi–Sn blank.</span></label>
+          <label for="iAct">Active metal in the melt <output id="oAct"></output>
+            <input type="range" id="iAct" min="0" max="10" step="0.5" value="5">
+            <span class="sub" id="oMelt">0 % gives a blank run with the host metal only.</span></label>
         </div>
         <div class="tg" id="toggles"></div>
         <div class="ctl">
@@ -267,18 +267,18 @@ th { font-size: 12px; color: var(--muted); font-weight: 500; }
           <div class="ctl">
             <label for="sMode">Kinetic hypothesis
               <select id="sMode">
-                <option value="nitride">A · YbN sink (no NH₃)</option>
+                <option value="nitride">A · stable nitride (no NH₃)</option>
                 <option value="tof" selected>B · catalytic, set TOF</option>
                 <option value="release">C · store, release on pressure drop</option>
               </select>
               <span class="sub" id="modeNote"></span></label>
-            <label for="iTOF" data-mode="tof">TOF at 200 °C, per Yb atom <output id="oTOF"></output>
+            <label for="iTOF" data-mode="tof">TOF at 200 °C, per active-metal atom <output id="oTOF"></output>
               <input type="range" id="iTOF" min="-11" max="-3" step="0.5" value="-6"></label>
             <label for="iEa" data-mode="tof">Apparent activation energy <output id="oEa"></output>
               <input type="range" id="iEa" min="20" max="160" step="5" value="80"></label>
-            <label for="iStore" data-mode="release">Reactive-N capacity, % of Yb <output id="oStore"></output>
+            <label for="iStore" data-mode="release">Reactive-N capacity, % of active metal <output id="oStore"></output>
               <input type="range" id="iStore" min="0.1" max="10" step="0.1" value="2"></label>
-            <label for="iTau" data-mode="nitride">YbN formation time constant <output id="oTau"></output>
+            <label for="iTau" data-mode="nitride">Nitride formation time constant <output id="oTau"></output>
               <input type="range" id="iTau" min="5" max="240" step="5" value="30"></label>
           </div>
         </details>
@@ -301,7 +301,7 @@ th { font-size: 12px; color: var(--muted); font-weight: 500; }
     <div class="kpi sun"><div class="lab">O₂ in R-201</div><div class="num" id="kO2">0<small>ppm</small></div><div class="note" id="kO2N"></div></div>
     <div class="kpi nh3"><div class="lab">NH₃ formed (model)</div><div class="num" id="kMade">0<small>µmol</small></div><div class="note" id="kMadeN"></div></div>
     <div class="kpi nh3"><div class="lab">NH₃ in acid trap AB-507</div><div class="num" id="kCap">0<small>µmol</small></div><div class="note" id="kCapN"></div></div>
-    <div class="kpi"><div class="lab">Yb still metallic</div><div class="num" id="kYb">100<small>%</small></div><div class="note" id="kYbN"></div></div>
+    <div class="kpi"><div class="lab">Catalyst still metallic</div><div class="num" id="kAct">100<small>%</small></div><div class="note" id="kActN"></div></div>
   </section>
 
   <section class="charts">
@@ -355,7 +355,7 @@ th { font-size: 12px; color: var(--muted); font-weight: 500; }
       <li>A lumped dynamic model of the rig in PID-002 (simplified): H₂, N₂ and Ar cylinders with regulators; FIC-101 / FIC-102 mass flow controllers and FI-104 rotameter; check valves; the H₂ line to sparger S2 and the N₂/Ar header to sparger S1 or the headspace; R-201 (SS316L, about 0.8 L) with an MgO crucible in the furnace H-201; PSV-301; the outlet needle valve NV-401; the vacuum pump P-601 with its CV-505 bypass; one dilute H₂SO₄ trap AB-507, venting outdoors. Pressures, the melt thermocouple and both MFCs are wired to a LabJack U6 and read on the PC.</li>
       <li>Each gas volume is a well-mixed node holding H₂, N₂, Ar, NH₃ and O₂ as ideal gas. Flows are driven by pressure difference through valve conductances, with bubbler liquid heads, the melt's hydrostatic head at the sparger tips, one-way check valves, and a capped explicit step so any valve line-up stays stable.</li>
       <li>Heat: the furnace (1.4 kW) runs on its own controller; the reactor and melt lag it by about 10 minutes and sit a little cooler. The melt is solid below 125 °C (DSC onset), mushy to the liquidus, and only lets gas through the spargers when liquid. Headspace gas heats with the melt, so a sealed reactor pressurises as it warms.</li>
-      <li>Chemistry is the unknown the rig is built to measure, so it is a choice, not a prediction. A: YbN forms and is too stable to give NH₃ (the thermodynamic result). B: catalytic NH₃ at a turnover frequency you set, with an Arrhenius term and the equilibrium limit. C: reactive N builds up in the melt under N₂ + H₂ and comes out as NH₃ when the pressure drops (the reported observation). Any O₂ that gets in oxidises the hot Yb.</li>
+      <li>Chemistry is the unknown the rig is built to measure, so it is a choice, not a prediction. A: a metal nitride forms and is too stable to give NH₃ (the thermodynamic result). B: catalytic NH₃ at a turnover frequency you set, with an Arrhenius term and the equilibrium limit. C: reactive N builds up in the melt under N₂ + H₂ and comes out as NH₃ when the pressure drops (the reported observation). Any O₂ that gets in oxidises the hot catalyst.</li>
       <li>NH₃ capture in the acid falls off at high gas flow and when the acid is used up; with one trap, what gets past it leaves through the vent and is not measured (the page shows the model's figure for it). The indophenol result carries about 3 % noise and a 0.02 mg N/L detection limit; the page also reports the smallest turnover frequency this run could have seen.</li>
       <li>Hazards from the HAZOP draft are live: acid suck-back (with a single trap and no suck-back bottle, acid runs straight back toward the pump), reverse flow through a stopped pump, H₂ with air, feeding into a solid melt, a sparger freezing shut after a power cut, over-pressure and PSV lift, opening a hot reactor, and a failed leak-up test.</li>
     </ul>
