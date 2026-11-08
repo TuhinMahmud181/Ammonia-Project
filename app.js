@@ -67,7 +67,7 @@ pipe("M620 300 H765 V588", "hdr", () => s.flows.S1);
 pipe("M620 300 V220 H690", "hdr", () => s.flows.HV202);
 pipe("M690 220 H812 V385", "rx", () => s.flows.HV202);
 // outlet
-pipe("M860 352 V170 H1010", "rx", () => s.flows.NV401 + s.flows.psv);
+pipe("M856 378 V170 H1010", "rx", () => s.flows.NV401 + s.flows.psv);
 pipe("M950 170 V128", "rx", () => s.flows.psv);
 pipe("M950 102 V45 H1274", "psvout", () => s.flows.psv);
 pipe("M1274 45 H1478", "vent", () => s.flows.psv + s.flows.vent);
