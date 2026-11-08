@@ -10,7 +10,7 @@ let s = S.create({});
 let running = true, speed = 60, demo = null, demoIdx = 0, anim = 0;
 const params = () => ({
   mode: $("sMode").value, logTOF: +$("iTOF").value, Ea: +$("iEa").value, storePct: +$("iStore").value,
-  nitrideTau: +$("iTau").value, actPct: +$("iAct").value, meltMass: +$("iMass").value,
+  nitrideTau: +$("iTau").value, meltMass: +$("iMass").value,
   fLeak: $("fLeak").checked, fCV505: $("fCV505").checked, fFIC101: $("fFIC101").checked, fPower: $("fPower").checked
 });
 const powerOK = () => !s.p.fPower && !s.v.esd;
@@ -150,7 +150,6 @@ const flowTag = (x, y, anchor) => txt(x, y, "", "mono", null, anchor || "middle"
 
 /* gas panel */
 valve("PCV-101", "cylH2", 130, 100, { reg: true, ctl: "cylH2" });
-valve("XV-101", "XV101", 215, 100, { solenoid: true });
 valve("PCV-102", "cylN2", 130, 300, { reg: true, ctl: "cylN2" });
 valve("PCV-104", "cylAr", 130, 470, { reg: true, ctl: "cylAr" });
 inst("PI", "101", 130, 55, null, () => s.v.cylH2 ? `${s.p.PregH2} kPa abs delivery` : "cylinder shut");
@@ -236,7 +235,7 @@ txt(1260, 375, "dilute H₂SO₄, 100 mL", "small");
 txt(1260, 389, "NH₃ capture", "small");
 const fTrap = flowTag(1305, 280, "start");
 tips["AB-507"] = () => `${s.liq.a1.acid.toFixed(0)} mL acid · NH₃ held ${(s.liq.a1.nh3 * 1e6).toFixed(2)} µmol · gas in ${Math.max(0, s.flows.b1 || 0).toFixed(0)} sccm · slipped to vent ${(s.made.slip * 1e6).toFixed(3)} µmol`;
-tips["FIC-101"] = () => `H₂ ${s.flows.FIC101.toFixed(1)} sccm · SP ${s.sp.FIC101} sccm (U6 DAC0 ${(s.sp.FIC101 / 20).toFixed(2)} V)${s.p.fFIC101 ? " · FAILED OPEN" : ""}${!(s.v.XV101 && powerOK()) ? " · XV-101 shut" : ""}`;
+tips["FIC-101"] = () => `H₂ ${s.flows.FIC101.toFixed(1)} sccm · SP ${s.sp.FIC101} sccm (U6 DAC0 ${(s.sp.FIC101 / 20).toFixed(2)} V)${s.p.fFIC101 ? " · FAILED OPEN" : ""}`;
 tips["FIC-102"] = () => `N₂ ${s.flows.FIC102.toFixed(1)} sccm · SP ${s.sp.FIC102} sccm (U6 DAC1 ${(s.sp.FIC102 / 20).toFixed(2)} V)`;
 tips["FI-104"] = () => `Ar rotameter ${s.flows.FI104.toFixed(0)} sccm · set ${s.sp.FI104} sccm (manual, not logged)`;
 
@@ -245,7 +244,7 @@ const esdG = el("g", { "aria-label": "Emergency shutdown HS-902" });
 el("circle", { cx: 1010, cy: 560, r: 18, fill: "#fff", stroke: "var(--hot)", "stroke-width": 2, class: "vb" }, esdG);
 const esdLamp = el("circle", { cx: 1010, cy: 560, r: 9, fill: "#f3c7bd" }, esdG);
 txt(1036, 556, "HS-902", "tag mono", esdG, "start");
-txt(1036, 570, "ESD: cuts 24 V to the relays", "small", esdG, "start");
+txt(1036, 570, "ESD: cuts the supply", "small", esdG, "start");
 clickable(esdG, "esd");
 
 /* ---------------- LabJack U6, wiring and PC ---------------- */
@@ -256,7 +255,7 @@ txt(U.x + 16, U.y + 102, "LabJack U6", "tag", null, "start", "fill:#fff;font-siz
 txt(U.x + 112, U.y + 102, "16-bit DAQ · USB", "small", null, "start", "fill:#b9c6cb");
 const TERM = [
   ["AIN0", "PT-201", "ain"], ["AIN1", "PT-301", "ain"], ["AIN2/3", "TE-201", "ain"], ["AIN4", "FIC-101 PV", "ain"], ["AIN5", "FIC-102 PV", "ain"],
-  ["DAC0", "FIC-101 SP", "dac"], ["DAC1", "FIC-102 SP", "dac"], ["FIO0", "XV-101", "dio"], ["FIO1", "P-601", "dio"]
+  ["DAC0", "FIC-101 SP", "dac"], ["DAC1", "FIC-102 SP", "dac"], ["FIO0", "P-601", "dio"]
 ];
 const WCOL = { ain: "#0d6f8f", dac: "#2f8a57", dio: "#c06f12" };
 const termX = (i) => U.x + 24 + i * 34;
@@ -284,10 +283,9 @@ wire(`M350 110 H362 V716 H${T(3)} V${ty}`, "ain", "AIN4", 366, 140);
 wire(`M350 116 H368 V724 H${T(5)} V${ty}`, "dac", "DAC0", 372, 160);
 wire(`M350 310 H376 V732 H${T(4)} V${ty}`, "ain", "AIN5", 380, 340);
 wire(`M350 314 H382 V740 H${T(6)} V${ty}`, "dac", "DAC1", 386, 360);
-wire(`M215 112 V748 H${T(7)} V${ty}`, "dio", "FIO0 → SSR", 219, 140);
-wire(`M1115 322 V764 H${T(8)} V${ty}`, "dio", "FIO1 → relay", 1119, 340);
+wire(`M1115 322 V764 H${T(7)} V${ty}`, "dio", "FIO0 → relay", 1119, 340);
 wire(`M1010 578 V640 H1180 V680`, "dio", "", 0, 0);
-txt(1184, 690, "24 V relay supply", "small", gWire, "middle");
+txt(1184, 690, "relay supply", "small", gWire, "middle");
 // PC
 const pcX = 1330, pcY = 700;
 el("rect", { x: pcX, y: pcY, width: 160, height: 140, rx: 6, fill: "#2b3a42", stroke: "#18262c", "stroke-width": 1.5 });
@@ -322,14 +320,13 @@ const ONOFF = {
   cylH2: ["H₂ cylinder", "cylH2", "Cylinder valve; regulator PCV-101 then delivers H₂ at about 1 barg."],
   cylN2: ["N₂ cylinder", "cylN2", "Cylinder valve; regulator PCV-102."],
   cylAr: ["Ar cylinder", "cylAr", "Cylinder valve; regulator PCV-104."],
-  "XV-101": ["XV-101", "XV101", "Fail-closed solenoid on the H₂ line, switched by U6 FIO0 through an SSR. Closes on power loss or ESD."],
   "HV-111": ["HV-111", "HV111", "H₂ line to the N₂/Ar header (send H₂ through S1, or purge the H₂ line)."],
   "HV-205": ["HV-205", "HV205", "H₂ line to sparger S2, straight into the melt."],
   "HV-201": ["HV-201", "HV201", "Header to sparger S1, into the melt."],
   "HV-202": ["HV-202", "HV202", "Header to the reactor headspace (purge, refill, sweep)."],
   "HV-601": ["HV-601", "HV601", "Isolates the vacuum pump. Close it before you stop P-601."],
-  pump: ["P-601 vacuum pump", "pump", "Switched by U6 FIO1 through a relay. Exhausts through AB-507."],
-  esd: ["HS-902 ESD", "esd", "Cuts 24 V to the relays: XV-101 closes, P-601 and the furnace stop."]
+  pump: ["P-601 vacuum pump", "pump", "Switched by U6 FIO0 through a relay. Exhausts through AB-507."],
+  esd: ["HS-902 ESD", "esd", "Cuts the supply: P-601, the MFCs and the furnace stop."]
 };
 let popId = null;
 function openPop(id, g) {
@@ -361,7 +358,7 @@ function popHTML(id) {
   if (id === "FIC-102") return head("FIC-102 · N₂ MFC") + `<div class="st">Set point from U6 DAC1; flow read back on AIN5.</div>` + rng("sp", "Set point", 0, 100, 1, s.sp.FIC102, "sccm") + `<div class="live" id="poLive"></div>`;
   if (id === "FI-104") return head("FI-104 · Ar rotameter") + `<div class="st">Manual needle on the rotameter. Not logged.</div>` + rng("sp", "Flow", 0, 500, 5, s.sp.FI104, "sccm") + `<div class="live" id="poLive"></div>`;
   if (id === "furnace") return head("H-201 furnace") + `<div class="st">Stand-alone furnace controller TIC-201. TE-201 in the melt reads lower than the furnace.</div><div class="row2"><button type="button" data-set="1" class="${s.v.furnace ? "on" : ""}">On</button><button type="button" data-set="0" class="${s.v.furnace ? "" : "on"}">Off</button></div>` + rng("sp", "Set point", 25, 600, 5, s.sp.furnaceSP, "°C") + `<div class="live" id="poLive"></div>`;
-  if (id === "melt") return head("Catalyst in R-201") + `<div class="st">Liquid-metal catalyst in the MgO crucible.</div>` + rng("mass", "Charge", 10, 150, 5, s.p.meltMass, "g") + rng("act", "Active metal", 0, 10, 0.5, s.p.actPct, "at%") + `<div class="live" id="poLive"></div>`;
+  if (id === "melt") return head("Catalyst in R-201") + `<div class="st">Liquid-metal catalyst in the MgO crucible.</div>` + rng("mass", "Charge", 10, 150, 5, s.p.meltMass, "g") + `<div class="live" id="poLive"></div>`;
   return head(id);
 }
 function wirePop(id) {
@@ -379,9 +376,9 @@ function wirePop(id) {
   if (id === "FI-104") bind("sp", (v) => { s.sp.FI104 = v; }, "sccm");
   if (id === "furnace") bind("sp", (v) => { s.sp.furnaceSP = v; }, "°C");
   if (id === "melt") {
-    const apply = () => { const m = +$("pi_mass").value, y = +$("pi_act").value; $("iMass").value = m; $("iAct").value = y; setCatalyst(); };
-    $("pi_mass").addEventListener("change", apply); $("pi_act").addEventListener("change", apply);
-    bind("mass", () => {}, "g"); bind("act", () => {}, "at%", 1);
+    const apply = () => { $("iMass").value = +$("pi_mass").value; setCatalyst(); };
+    $("pi_mass").addEventListener("change", apply);
+    bind("mass", () => {}, "g");
   }
   livePop();
 }
@@ -395,20 +392,19 @@ function livePop() {
   else if (id === "FIC-102") t = `PV ${f.FIC102.toFixed(1)} sccm · DAC1 ${(s.sp.FIC102 / 20).toFixed(2)} V · AIN5 ${(f.FIC102 / 20).toFixed(3)} V`;
   else if (id === "FI-104") t = `${f.FI104.toFixed(0)} sccm Ar into the header`;
   else if (id === "furnace") t = `PV ${(s.th.Tf - 273.15).toFixed(0)} °C · heater ${(s.th.Pw / 1000).toFixed(2)} kW · melt ${(s.th.Tm - 273.15).toFixed(0)} °C`;
-  else if (id === "melt") t = `${(s.melt.nAct * 1000).toFixed(2)} mmol active metal · depth ${(s.melt.depth * 1000).toFixed(1)} mm · ${meltState()}`;
+  else if (id === "melt") t = `${s.p.meltMass} g · depth ${(s.melt.depth * 1000).toFixed(1)} mm · ${meltState()}`;
   else if (id === "pump") t = `${f.pump.toFixed(0)} sccm · suction ${(S.press(s.N.y) / 1000).toFixed(1)} kPa`;
   else if (id === "HV-201") t = `S1 ${f.S1.toFixed(1)} sccm · PT-201 ${(S.press(s.N.hdr) / 1000).toFixed(1)} kPa`;
   else if (id === "HV-205") t = `S2 ${f.S2.toFixed(1)} sccm`;
   else if (id === "HV-202") t = `${f.HV202.toFixed(1)} sccm into the headspace`;
   else if (id === "HV-111") t = `${f.HV111.toFixed(1)} sccm`;
-  else if (id === "XV-101") t = `FIO0 ${s.v.XV101 && powerOK() ? "HIGH · coil energised" : "LOW · closed"}`;
   else if (id.startsWith("cyl")) t = s.v[id] ? "open" : "shut";
   else if (id === "esd") t = s.v.esd ? "PRESSED" : "armed";
   L.textContent = t;
 }
 
 /* ---------------- side-panel toggles and sliders ---------------- */
-const TOG = [["cylH2", "H₂ cyl"], ["cylN2", "N₂ cyl"], ["cylAr", "Ar cyl"], ["XV101", "XV-101"], ["HV111", "HV-111"], ["HV205", "HV-205"],
+const TOG = [["cylH2", "H₂ cyl"], ["cylN2", "N₂ cyl"], ["cylAr", "Ar cyl"], ["HV111", "HV-111"], ["HV205", "HV-205"],
   ["HV201", "HV-201"], ["HV202", "HV-202"], ["HV601", "HV-601"], ["pump", "P-601"], ["furnace", "Furnace"], ["esd", "ESD"]];
 TOG.forEach(([k, lab]) => {
   const b = document.createElement("button"); b.type = "button"; b.textContent = lab; b.id = "t_" + k;
@@ -430,19 +426,17 @@ const SL = [
   ["iEa", "oEa", (v) => { s.p.Ea = v; return v + " kJ/mol"; }],
   ["iStore", "oStore", (v) => { s.p.storePct = v; return v.toFixed(1) + " %"; }],
   ["iTau", "oTau", (v) => { s.p.nitrideTau = v; return v + " min"; }],
-  ["iAct", "oAct", (v) => v.toFixed(1) + " at%"],
   ["iMass", "oMass", (v) => v + " g"]
 ];
 SL.forEach(([i, o, f]) => { $(i).addEventListener("input", () => { $(o).textContent = f(+$(i).value); }); });
 SL.slice(5).forEach(([i, o, f]) => { $(o).textContent = f(+$(i).value); });
 function setCatalyst() {
-  S.setMelt(s, +$("iMass").value, +$("iAct").value);
-  $("oMass").textContent = $("iMass").value + " g"; $("oAct").textContent = (+$("iAct").value).toFixed(1) + " at%";
+  S.setMelt(s, +$("iMass").value, s.p.actPct);
+  $("oMass").textContent = $("iMass").value + " g";
   meltNote();
 }
-function meltNote() { $("oMelt").textContent = `${(s.melt.nAct * 1000).toFixed(2)} mmol active metal, melt about ${(s.melt.depth * 1000).toFixed(1)} mm deep. 0 % active metal gives a host-only blank.`; }
+function meltNote() { $("oMelt").textContent = `Melt about ${(s.melt.depth * 1000).toFixed(1)} mm deep in the crucible.`; }
 $("iMass").addEventListener("change", setCatalyst);
-$("iAct").addEventListener("change", setCatalyst);
 function syncSliders() {
   const set = (id, v) => { if (document.activeElement !== $(id)) $(id).value = v; };
   set("iFIC101", s.sp.FIC101); set("iFIC102", s.sp.FIC102); set("iFI104", s.sp.FI104); set("iNV", s.v.NV401); set("iTsp", s.sp.furnaceSP);
@@ -500,7 +494,7 @@ const fmt = (v, d) => (Math.abs(v) >= 1e4 ? v.toExponential(1) : v.toFixed(d));
 function showAnalysis() {
   const a = s.analysis; if (!a) return;
   let h = `<table><thead><tr><th>Trap</th><th>Acid</th><th>NH₄⁺-N, mg/L</th><th>NH₃, µmol</th></tr></thead><tbody><tr><td>AB-507</td><td>${a.a1.V.toFixed(0)} mL</td><td class="big">${a.a1.below ? "&lt; LOD" : a.a1.meas.toFixed(3)}</td><td>${a.a1.below ? "—" : a.a1.umol.toFixed(3)}</td></tr></tbody></table>`;
-  if (a.holdMin > 0) h += `<p>Hold ${a.holdMin.toFixed(0)} min over ${(a.nAct * 1e3).toFixed(2)} mmol active metal. Apparent TOF from the trap: <b class="big">${a.tofApparent > a.tofLOD ? a.tofApparent.toExponential(2) + " s⁻¹" : "not detected"}</b>. Smallest TOF this run could detect: ${a.tofLOD.toExponential(1)} s⁻¹.</p>`;
+  if (a.holdMin > 0) h += `<p>Hold ${a.holdMin.toFixed(0)} min. Apparent TOF from the trap: <b class="big">${a.tofApparent > a.tofLOD ? a.tofApparent.toExponential(2) + " s⁻¹" : "not detected"}</b>. Smallest TOF this run could detect: ${a.tofLOD.toExponential(1)} s⁻¹.</p>`;
   else h += "<p>No hold recorded yet, so no rate can be worked out.</p>";
   if (a.slip > 0.05 * Math.max(a.a1.umol, 1e-9) && a.slip > 0.01) h += `<p style="color:#9a5c06">Model: ${a.slip.toFixed(2)} µmol NH₃ went past AB-507 to the vent (not measured, there is no second trap). Release or sweep more slowly.</p>`;
   if (s.liq.ln.acid > 0.5 || s.yLiquid > 0) h += `<p style="color:var(--hot)">Acid was sucked back out of AB-507: this sample is not valid.</p>`;
@@ -534,8 +528,7 @@ const Vin = () => {   // live U6 terminal values
     AIN5: (f.FIC102 / 20).toFixed(3) + " V",
     DAC0: (s.sp.FIC101 / 20).toFixed(2) + " V",
     DAC1: (s.sp.FIC102 / 20).toFixed(2) + " V",
-    FIO0: s.v.XV101 && powerOK() ? "1" : "0",
-    FIO1: s.v.pump && powerOK() ? "1" : "0"
+    FIO0: s.v.pump && powerOK() ? "1" : "0"
   };
 };
 const WIRING = [
@@ -546,8 +539,7 @@ const WIRING = [
   ["FIC-102", "N₂ flow out", "AIN5", "0–5 V = 0–100 sccm", "AIN5"],
   ["FIC-101", "H₂ set point in", "DAC0", "0–5 V = 0–100 sccm", "DAC0"],
   ["FIC-102", "N₂ set point in", "DAC1", "0–5 V = 0–100 sccm", "DAC1"],
-  ["XV-101", "H₂ solenoid", "FIO0", "→ SSR → 24 VDC coil, fail-closed", "FIO0"],
-  ["P-601", "vacuum pump", "FIO1", "→ relay → pump mains", "FIO1"]
+  ["P-601", "vacuum pump", "FIO0", "→ relay → pump mains", "FIO0"]
 ];
 function updateWiring() {
   const v = Vin();
@@ -595,7 +587,7 @@ function updatePanel() {
   const rows = [
     `PT-201  ${r.PT201.toFixed(1).padStart(6)} kPa`, `PT-301  ${Prx.toFixed(1).padStart(6)} kPa`, `TE-201  ${TmC.toFixed(1).padStart(6)} °C`,
     `FIC-101 ${r.FIC101.toFixed(1).padStart(5)}/${String(s.sp.FIC101).padStart(3)} sccm`, `FIC-102 ${r.FIC102.toFixed(1).padStart(5)}/${String(s.sp.FIC102).padStart(3)} sccm`,
-    `XV-101 ${v.FIO0 === "1" ? "OPEN" : "SHUT"}  P-601 ${v.FIO1 === "1" ? "ON" : "OFF"}`
+    `P-601 ${v.FIO0 === "1" ? "ON" : "OFF"}  furnace ${s.v.furnace && powerOK() ? "ON" : "OFF"}`
   ];
   rows.forEach((t, i) => { scr.rows[i].textContent = t; });
   const lg = s.logs, t1 = s.t, t0 = t1 - 3600, x0 = pcX + 12, x1 = pcX + 148, y0 = pcY + 112, hgt = 13;
@@ -633,7 +625,7 @@ function updateScene(rd) {
   ["cylH2", "cylN2", "cylAr"].forEach((k) => { cyl[k].ind.setAttribute("fill", s.v[k] ? "var(--ok)" : "#fff"); cyl[k].st.textContent = s.v[k] ? "open" : "shut"; });
   for (const id in valves) {
     const V = valves[id];
-    let open = V.key === "NV401" ? s.v.NV401 > 0 : V.key === "XV101" ? s.v.XV101 && pw : !!s.v[V.key];
+    let open = V.key === "NV401" ? s.v.NV401 > 0 : !!s.v[V.key];
     V.b.setAttribute("fill", open ? "#e3f3ea" : "var(--ink)");
     V.b.setAttribute("stroke", open ? "var(--ok)" : "var(--ink)");
   }
@@ -653,7 +645,7 @@ function updateScene(rd) {
   meltSurf.setAttribute("y1", 601 - depthPx); meltSurf.setAttribute("y2", 601 - depthPx);
   melt.setAttribute("fill", s.fL >= 1 ? `rgb(${Math.round(150 + 80 * hot)},${Math.round(160 - 30 * hot)},${Math.round(170 - 80 * hot)})` : s.fL > 0 ? "#9fa6aa" : "#8a8f93");
   meltSurf.setAttribute("stroke", s.fL > 0 ? "#e6ecee" : "#a7aeb2");
-  meltLab.textContent = `${s.p.meltMass} g catalyst · ${s.p.actPct} at% active · ${meltState()}`;
+  meltLab.textContent = `${s.p.meltMass} g catalyst · ${meltState()}`;
   headspace.setAttribute("fill", gasColour(comp("rx")));
   headspace.setAttribute("opacity", Math.min(0.35, S.press(N.rx) / 101325 * 0.3));
   plugMark.S1.textContent = s.spg.S1.plugged ? "S1 plugged" : ""; plugMark.S2.textContent = s.spg.S2.plugged ? "S2 plugged" : "";

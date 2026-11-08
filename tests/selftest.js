@@ -28,7 +28,7 @@ for (const mode of ["nitride", "tof", "release"]) {
 { const s = S.create({ fLeak: true }); s.v.HV601 = true; s.v.pump = true; s.v.NV401 = 100;
   while (P(s) > 5 && s.t < 900) S.advance(s, 1); s.v.NV401 = 0; S.advance(s, 400);
   ok(s.sop.leak.state === "fail", "worn gasket fails the leak-up test"); }
-{ const s = S.create(); s.v.cylH2 = true; s.v.XV101 = true; s.sp.FIC101 = 100; s.v.HV111 = true; s.v.HV202 = true; s.v.NV401 = 50; S.advance(s, 900);
+{ const s = S.create(); s.v.cylH2 = true; s.sp.FIC101 = 100; s.v.HV111 = true; s.v.HV202 = true; s.v.NV401 = 50; S.advance(s, 900);
   ok(s.events.some((e) => e.text.startsWith("FLAMMABLE")), "H2 into an unpurged reactor raises the flammable alarm"); }
 { const s = S.create({ mode: "tof" }); const n0 = s.melt.nAct; S.setMelt(s, 100, 5);
   ok(Math.abs(s.melt.nAct / n0 - 2) < 1e-9 && Math.abs(s.cat.metal / n0 - 2) < 1e-9, "doubling the catalyst charge doubles the active metal inventory"); }

@@ -229,8 +229,17 @@ th { font-size: 12px; color: var(--muted); font-weight: 500; }
         <div class="btns">
           <button class="primary" id="bDemo" type="button">Run one loop</button>
           <select id="sHold" aria-label="Hold time">
+            <option value="10">hold 10 min</option>
+            <option value="20">hold 20 min</option>
             <option value="30">hold 30 min</option>
+            <option value="40">hold 40 min</option>
+            <option value="50">hold 50 min</option>
             <option value="60" selected>hold 60 min</option>
+            <option value="70">hold 70 min</option>
+            <option value="80">hold 80 min</option>
+            <option value="90">hold 90 min</option>
+            <option value="100">hold 100 min</option>
+            <option value="110">hold 110 min</option>
             <option value="120">hold 120 min</option>
           </select>
           <button id="bDemoStop" type="button" disabled>Stop</button>
@@ -243,9 +252,7 @@ th { font-size: 12px; color: var(--muted); font-weight: 500; }
         <div class="ctl">
           <label for="iMass">Catalyst charge (melt mass) <output id="oMass"></output>
             <input type="range" id="iMass" min="10" max="150" step="5" value="50"></label>
-          <label for="iAct">Active metal in the melt <output id="oAct"></output>
-            <input type="range" id="iAct" min="0" max="10" step="0.5" value="5">
-            <span class="sub" id="oMelt">0 % gives a blank run with the host metal only.</span></label>
+          <span class="sub" id="oMelt"></span>
         </div>
         <div class="tg" id="toggles"></div>
         <div class="ctl">
@@ -331,7 +338,7 @@ th { font-size: 12px; color: var(--muted); font-weight: 500; }
       <section class="card">
         <h2>Instrument wiring · LabJack U6</h2>
         <div style="overflow-x:auto"><table id="wiring"></table></div>
-        <p class="byline" style="margin-top:8px">The U6 reads the transducers and the thermocouple, writes the two MFC set points from its DACs, and switches XV-101 and P-601 through relays. HS-902 cuts the 24 V relay supply directly, independent of the U6 and PC. Signal ranges are provisional until the parts are bought.</p>
+        <p class="byline" style="margin-top:8px">The U6 reads the transducers and the thermocouple, writes the two MFC set points from its DACs, and switches P-601 through a relay. HS-902 cuts the supply directly, independent of the U6 and PC. Signal ranges are provisional until the parts are bought.</p>
       </section>
       <section class="card">
         <h2>Event log</h2>

@@ -98,7 +98,7 @@
     };
     s.v = {   // valves and switches; true = open / on
       cylH2: false, cylN2: false, cylAr: false,
-      XV101: false, HV111: false, HV205: false, HV201: false, HV202: false, HV601: false,
+      HV111: false, HV205: false, HV201: false, HV202: false, HV601: false,
       NV401: 0,              // 0..100 % opening
       pump: false, furnace: false, esd: false
     };
@@ -179,7 +179,7 @@
       const f = spSccm * SCCM * clamp((Preg * 1000 - press(nd)) / 15000, 0, 1);
       return f * dt;
     };
-    const xvOpen = v.XV101 && power && !v.esd;
+    const xvOpen = power && !v.esd;          // MFCs need power
     const sp101 = p.fFIC101 ? 100 : s.sp.FIC101;
     let d;
     d = supply(v.cylH2 && xvOpen, p.PregH2, sp101, N.h2l); N.h2l.n[H2] += d; fl.FIC101 = d / dt / SCCM;
@@ -355,9 +355,9 @@
     alarm(s, "suck", !!s.suckback && s.liq.ln.acid > 0.5, "alarm", "ACID SUCK-BACK out of AB-507: the trap was pulled below atmosphere. This run's NH₃ sample is lost.");
     alarm(s, "pumpRev", v.HV601 && !(v.pump && !p.fPower && !v.esd) && press(N.y) < press(N.ln) - 2000, "warn", "Reverse flow through stopped P-601: close HV-601 before stopping the pump (HAZOP 5.2).");
     alarm(s, "hot", TmC > 500, "warn", "Melt above 500 °C, the provisional rig operating limit.");
-    alarm(s, "power", p.fPower, "alarm", "POWER FAILURE: furnace off, XV-101 closed, pump stopped. Melt will freeze around the spargers.");
-    alarm(s, "esd", v.esd, "alarm", "ESD HS-902 pressed: XV-101 closed, furnace and pump off.");
-    alarm(s, "h2noPurge", v.cylH2 && v.XV101 && s.flows.FIC101 > 0.5 && !s.sop.done.purge, "warn", "H₂ admitted before the Ar purge was completed (permissive P-1).");
+    alarm(s, "power", p.fPower, "alarm", "POWER FAILURE: furnace, MFCs and pump off. Melt will freeze around the spargers.");
+    alarm(s, "esd", v.esd, "alarm", "ESD HS-902 pressed: furnace, MFCs and pump off.");
+    alarm(s, "h2noPurge", v.cylH2 && s.flows.FIC101 > 0.5 && !s.sop.done.purge, "warn", "H₂ admitted before the Ar purge was completed (permissive P-1).");
 
     // leak-up test: reactor isolated after evacuation below 10 kPa, watched for 5 min
     const iso = !v.HV201 && !v.HV202 && !v.HV205 && v.NV401 === 0;
@@ -445,7 +445,7 @@
     const f = old > 0 ? s.melt.nAct / old : 0;
     if (old > 0) { s.cat.metal *= f; s.cat.nitride *= f; s.cat.oxide *= f; s.cat.store *= f; }
     else { s.cat = { metal: s.melt.nAct, nitride: 0, oxide: 0, store: 0 }; }
-    event(s, "info", `Catalyst charge set to ${mass} g, ${actPct} at% active metal (${(s.melt.nAct * 1000).toFixed(2)} mmol active metal, melt depth ${(s.melt.depth * 1000).toFixed(1)} mm).`);
+    event(s, "info", `Catalyst charge set to ${mass} g (melt depth ${(s.melt.depth * 1000).toFixed(1)} mm).`);
   }
 
   function analyse(s) {
@@ -511,13 +511,13 @@
     add(`Feed lines above R-201 pressure: open HV-201 (S1) and HV-205 (S2); Ar bubbles through both dip tubes and out to the trap for ${opt.arMin} min`,
       (s) => press(s.N.hdr) > press(s.N.rx) + 3000 && press(s.N.h2l) > press(s.N.rx) + 3000, (s) => { s.v.HV201 = true; s.v.HV205 = true; s._ar = s.t; });
     add("Ar done: stop Ar, close HV-111. H₂ 75 sccm bubbles through S2 and N₂ 25 sccm through S1, outlet still open to push the Ar out",
-      (s) => s.t - s._ar >= opt.arMin * 60, (s) => { s.sp.FI104 = 0; s.v.cylAr = false; s.v.HV111 = false; s.v.cylH2 = true; s.v.XV101 = true; s.sp.FIC101 = 75; s.v.cylN2 = true; s.sp.FIC102 = 25; s._dsp = s.t; });
+      (s) => s.t - s._ar >= opt.arMin * 60, (s) => { s.sp.FI104 = 0; s.v.cylAr = false; s.v.HV111 = false; s.v.cylH2 = true; s.sp.FIC101 = 75; s.v.cylN2 = true; s.sp.FIC102 = 25; s._dsp = s.t; });
     add(`After ${opt.displaceMin} min: close the outlet NV-401; H₂ and N₂ keep bubbling until PT-301 reaches ${opt.fillKPa} kPa`,
       (s) => s.t - s._dsp >= opt.displaceMin * 60, (s) => { s.v.NV401 = 0; });
     add(`PT-301 at ${opt.fillKPa} kPa: MFCs to zero, hold ${H} min with the melt under N₂ + H₂`,
       (s) => P(s) >= opt.fillKPa, (s) => { s.sp.FIC101 = 0; s.sp.FIC102 = 0; s._hold = s.t; });
-    add(`Hold ${H} min done: close the inlet valves (HV-201, HV-205, XV-101, cylinders), open the outlet NV-401 to 40 %`,
-      (s) => s.t - s._hold >= H * 60, (s) => { s.v.HV201 = false; s.v.HV205 = false; s.v.XV101 = false; s.v.cylH2 = false; s.v.cylN2 = false; s.v.NV401 = 40; s._rel = s.t; });
+    add(`Hold ${H} min done: close the inlet valves (HV-201, HV-205, cylinders), open the outlet NV-401 to 40 %`,
+      (s) => s.t - s._hold >= H * 60, (s) => { s.v.HV201 = false; s.v.HV205 = false; s.v.cylH2 = false; s.v.cylN2 = false; s.v.NV401 = 40; s._rel = s.t; });
     add("Pressure down: Ar 150 sccm into the header, HV-111 open, so both feed lines build pressure again",
       (s) => P(s) < 103 && s.t - s._rel > 60, (s) => { s.v.cylAr = true; s.sp.FI104 = 150; s.v.HV111 = true; });
     add(`Feed lines above R-201 pressure: open HV-201 and HV-205; Ar bubbles through S1 and S2 for ${opt.sweepMin} min, sweeping everything into AB-507`,
