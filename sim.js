@@ -2,7 +2,7 @@
  * Liquid-metal ammonia kinetics rig — simulation engine
  * Follows P&ID PID-002 (simplified, rev G): H2 / N2 / Ar cylinders -> regulators -> MFCs -> header
  * -> spargers S1 / S2 or headspace -> R-201 in furnace H-201 -> NV-401 -> (CV-505 or P-601)
- * -> SB-506 suck-back -> AB-507 / AB-508 acid traps -> BB-509 oil bubbler -> vent outdoors.
+ * -> AB-507 acid trap (dilute H2SO4) -> vent outdoors. Instruments read by a LabJack U6.
  *
  * Lumped model: every gas volume is a well-mixed node (ideal gas, 5 species). Flows between
  * nodes are pressure-driven through valve conductances; each transfer is capped at half of what
@@ -43,7 +43,6 @@
       pumpUlt: 0.1,           // kPa ultimate
       acidVol: 100,           // mL per acid trap
       acidMolar: 0.05,        // mol/L H2SO4
-      oilVol: 100,            // mL in BB-509
       // chemistry
       mode: "tof",            // "nitride" | "tof" | "release"
       logTOF: -6,             // log10 TOF, s^-1 per Yb atom at 200 °C
@@ -90,17 +89,13 @@
       hdr: node(25e-6, Ta, PATM, AIR),
       rx: node(p.Vreactor - m.vol, Ta, PATM, AIR),
       y: node(20e-6, Ta, PATM, AIR),
-      sb: node(250e-6, Ta, PATM, AIR),
+      ln: node(15e-6, Ta, PATM, AIR),                       // line from P-601 / CV-505 to the trap
       a1: node((250 - p.acidVol) * 1e-6, Ta, PATM, AIR),
-      a2: node((250 - p.acidVol) * 1e-6, Ta, PATM, AIR),
-      bb: node((250 - p.oilVol) * 1e-6, Ta, PATM, AIR),
       atm: { atm: true, V: Infinity, T: Ta, n: [0, 0, 0, 0, 0] }
     };
     s.liq = {
-      sb: { acid: 0, oil: 0, nh3: 0, cap: 250, tip: 250 },        // empty bottle, short tubes
-      a1: { acid: p.acidVol, oil: 0, nh3: 0, cap: 250, tip: 15, h2so4: p.acidVol / 1000 * p.acidMolar },
-      a2: { acid: p.acidVol, oil: 0, nh3: 0, cap: 250, tip: 15, h2so4: p.acidVol / 1000 * p.acidMolar },
-      bb: { acid: 0, oil: p.oilVol, nh3: 0, cap: 250, tip: 15 }
+      ln: { acid: 0, oil: 0, nh3: 0, cap: 15 },                     // liquid that comes back up the inlet tube
+      a1: { acid: p.acidVol, oil: 0, nh3: 0, cap: 250, tip: 15, h2so4: p.acidVol / 1000 * p.acidMolar }
     };
     s.v = {   // valves and switches; true = open / on
       cylH2: false, cylN2: false, cylAr: false,
@@ -111,7 +106,7 @@
     s.sp = { FIC101: 0, FIC102: 0, FI104: 0, furnaceSP: 220 };   // sccm, sccm, sccm, °C
     s.th = { Tf: Ta, Tm: Ta, Pw: 0, I: 0 };
     s.yb = { metal: m.nYb, nitride: 0, oxide: 0, store: 0 };
-    s.made = { nh3: 0, n2up: 0 };                                   // mol NH3 formed, mol N2 taken up
+    s.made = { nh3: 0, n2up: 0, slip: 0 };                                   // mol NH3 formed, mol N2 taken up
     s.flows = { FIC101: 0, FIC102: 0, FI104: 0, S1: 0, S2: 0, HV202: 0, HV111: 0, NV401: 0, CV505: 0, pump: 0, b1: 0, b2: 0, b3: 0, vent: 0, psv: 0, leak: 0 };
     s.spg = { S1: { inTube: false, plugged: false }, S2: { inTube: false, plugged: false } };
     s.sop = { leak: { state: "idle", t0: 0, P0: 0, rate: null }, cycles: 0, evacuated: false, done: {} };
@@ -157,7 +152,7 @@
     const p = s.p, N = s.N, v = s.v, L = s.liq, m = s.melt, th = s.th;
     const Ta = p.Tamb + 273.15;
     const power = !p.fPower;
-    const fl = { FIC101: 0, FIC102: 0, FI104: 0, S1: 0, S2: 0, HV202: 0, HV111: 0, NV401: 0, CV505: 0, pump: 0, b1: 0, b2: 0, b3: 0, vent: 0, psv: 0, leak: 0 };
+    const fl = { FIC101: 0, FIC102: 0, FI104: 0, S1: 0, S2: 0, HV202: 0, HV111: 0, NV401: 0, CV505: 0, pump: 0, b1: 0, vent: 0, psv: 0, leak: 0 };
 
     /* --- thermal: furnace chamber (own controller) and reactor + melt --- */
     const heaterOK = v.furnace && power && !v.esd;
@@ -222,10 +217,10 @@
     if (v.NV401 > 0) { const u = v.NV401 / 100; d = flowDP(N.rx, N.y, 3e-7 * u * u, dt); move(N.rx, N.y, d); fl.NV401 = d / dt / SCCM; }
 
     /* --- CV-505 bypass and vacuum pump P-601 --- */
-    d = flowDP(N.y, N.sb, 1e-6, dt, 500);
+    d = flowDP(N.y, N.ln, 1e-6, dt, 500);
     if (d < 0) d = 0;
-    if (p.fCV505) d = flowDP(N.y, N.sb, 1e-6, dt);   // failed check valve passes both ways
-    move(N.y, N.sb, d); fl.CV505 = d / dt / SCCM;
+    if (p.fCV505) d = flowDP(N.y, N.ln, 1e-6, dt);   // failed check valve passes both ways
+    move(N.y, N.ln, d); fl.CV505 = d / dt / SCCM;
     const pumpOn = v.pump && power && !v.esd;
     if (v.HV601) {
       if (pumpOn) {
@@ -233,10 +228,10 @@
         if (Py > Pu) {
           let dn = (p.pumpSpeed / 60000) * (Py - Pu) / (R * N.y.T) * dt;
           dn = Math.min(dn, 0.5 * sum(N.y.n) * (Py - Pu) / Py);
-          move(N.y, N.sb, dn); fl.pump = dn / dt / SCCM;
+          move(N.y, N.ln, dn); fl.pump = dn / dt / SCCM;
         }
       } else {
-        d = flowDP(N.y, N.sb, 5e-8, dt); move(N.y, N.sb, d); fl.pump = d / dt / SCCM;   // leak back through a stopped pump
+        d = flowDP(N.y, N.ln, 5e-8, dt); move(N.y, N.ln, d); fl.pump = d / dt / SCCM;   // leak back through a stopped pump
       }
     }
 
@@ -278,18 +273,14 @@
         const dn = flowDP(up, hd, 2e-7, dt); move(up, hd, dn); fl[fkey] = dn / dt / SCCM;   // gas comes back once the tip is clear
       }
     };
-    bubbler(N.sb, L.sb, "a1", N.a1, "b1");
-    bubbler(N.a1, L.a1, "a2", N.a2, "b2");
-    bubbler(N.a2, L.a2, "bb", N.bb, "b3");
-    d = flowDP(N.bb, N.atm, 5e-6, dt); move(N.bb, N.atm, d); fl.vent = d / dt / SCCM;
+    bubbler(N.ln, L.ln, "a1", N.a1, "b1");
+    { const out = [0, 0, 0, 0, 0]; d = flowDP(N.a1, N.atm, 5e-6, dt); move(N.a1, N.atm, d, out); fl.vent = d / dt / SCCM; if (d > 0) s.made.slip += out[NH3]; }
     // gas volumes shrink or grow with the liquid moved around
-    N.sb.V = (L.sb.cap - L.sb.acid - L.sb.oil) * 1e-6;
+    N.ln.V = Math.max(1e-6, (L.ln.cap - L.ln.acid - L.ln.oil)) * 1e-6;
     N.a1.V = (L.a1.cap - L.a1.acid - L.a1.oil) * 1e-6;
-    N.a2.V = (L.a2.cap - L.a2.acid - L.a2.oil) * 1e-6;
-    N.bb.V = (L.bb.cap - L.bb.acid - L.bb.oil) * 1e-6;
-    if (L.sb.acid + L.sb.oil > 200) {
-      const over = L.sb.acid + L.sb.oil - 200; L.sb.acid -= over; s.yLiquid += over;
-      alarm(s, "sbOver", true, "alarm", "SB-506 overflowed: acid has reached the pump / NV-401 line.");
+    if (L.ln.acid + L.ln.oil > 8) {
+      const over = L.ln.acid + L.ln.oil - 8; L.ln.acid -= over; s.yLiquid += over;
+      alarm(s, "sbOver", true, "alarm", "Acid has run back past CV-505 / P-601 toward NV-401: there is no suck-back bottle to catch it.");
       if (v.NV401 > 0 && Prx < press(N.y)) {
         const hot = th.Tm - 273.15 > 100;
         alarm(s, "acidRx", true, "alarm", hot ? "ACID ENTERED HOT R-201: violent boiling and H₂ from acid–metal reaction (HAZOP 4.1)."
@@ -360,8 +351,8 @@
     const blocked = (open, line) => open && s.fL < 0.3 && press(line) > press(N.rx) + 3000;
     alarm(s, "frozen", blocked(v.HV201, N.hdr) || blocked(v.HV205, N.h2l), "warn", "Feeding into a solid melt: the sparger is blocked until the melt is fully liquid (HAZOP A7).");
     alarm(s, "vig", s.fb1 > 800, "warn", "Violent bubbling in AB-507 (>800 sccm): acid carry-over and NH₃ breakthrough. Throttle NV-401.");
-    alarm(s, "suck", !!s.suckback && s.liq.sb.acid > 1, "alarm", "ACID SUCK-BACK into SB-506: the trap train was pulled below atmosphere. This run's NH₃ sample is lost.");
-    alarm(s, "pumpRev", v.HV601 && !(v.pump && !p.fPower && !v.esd) && press(N.y) < press(N.sb) - 2000, "warn", "Reverse flow through stopped P-601: close HV-601 before stopping the pump (HAZOP 5.2).");
+    alarm(s, "suck", !!s.suckback && s.liq.ln.acid > 0.5, "alarm", "ACID SUCK-BACK out of AB-507: the trap was pulled below atmosphere. This run's NH₃ sample is lost.");
+    alarm(s, "pumpRev", v.HV601 && !(v.pump && !p.fPower && !v.esd) && press(N.y) < press(N.ln) - 2000, "warn", "Reverse flow through stopped P-601: close HV-601 before stopping the pump (HAZOP 5.2).");
     alarm(s, "hot", TmC > 500, "warn", "Melt above 500 °C, the provisional rig operating limit.");
     alarm(s, "power", p.fPower, "alarm", "POWER FAILURE: furnace off, XV-101 closed, pump stopped. Melt will freeze around the spargers.");
     alarm(s, "esd", v.esd, "alarm", "ESD HS-902 pressed: XV-101 closed, furnace and pump off.");
@@ -416,7 +407,7 @@
       FI104: Math.round(s.flows.FI104 || 0),
       x, fL: s.fL,
       nh3ppm: x[NH3] * 1e6, o2ppm: x[O2] * 1e6,
-      cap1: s.liq.a1.nh3 * 1e6, cap2: s.liq.a2.nh3 * 1e6,      // µmol
+      cap1: s.liq.a1.nh3 * 1e6, cap2: 0, slip: s.made.slip * 1e6,      // µmol
       made: s.made.nh3 * 1e6, n2up: s.made.n2up * 1e6,
       ybMetal: s.yb.metal / s.melt.nYb * 100 || 0
     };
@@ -444,6 +435,17 @@
   }
 
   /* ---------------- operator actions ---------------- */
+  // change the catalyst charge (mass, g, and Yb at%) — Yb pools are rescaled in proportion
+  function setMelt(s, mass, ybAt) {
+    const old = s.melt.nYb;
+    s.p.meltMass = mass; s.p.ybAt = ybAt;
+    s.melt = meltProps(s.p);
+    const f = old > 0 ? s.melt.nYb / old : 0;
+    if (old > 0) { s.yb.metal *= f; s.yb.nitride *= f; s.yb.oxide *= f; s.yb.store *= f; }
+    else { s.yb = { metal: s.melt.nYb, nitride: 0, oxide: 0, store: 0 }; }
+    event(s, "info", `Catalyst charge set to ${mass} g, ${ybAt} at% Yb (${(s.melt.nYb * 1000).toFixed(2)} mmol Yb, melt depth ${(s.melt.depth * 1000).toFixed(1)} mm).`);
+  }
+
   function analyse(s) {
     // indophenol (salicylate) method on each acid trap: noise ~3 % rel, LOD 0.02 mg N/L
     const one = (B) => {
@@ -452,27 +454,26 @@
       const meas = true_mgNL * (1 + 0.03 * gauss()) + 0.007 * gauss();
       return { V: B.acid, true: true_mgNL, meas, lod: 0.02, below: meas < 0.02, umol: (Math.max(0, meas) * VL / 14.007) * 1000 };
     };
-    const a1 = one(s.liq.a1), a2 = one(s.liq.a2);
-    const tot = a1.umol + a2.umol;
+    const a1 = one(s.liq.a1);
+    const tot = a1.umol;
     const hold = s.sop.holdMin || 0;
-    s.analysis = { t: s.t, a1, a2, totUmol: tot, holdMin: hold, nYb: s.melt.nYb,
+    s.analysis = { t: s.t, a1, slip: s.made.slip * 1e6, totUmol: tot, holdMin: hold, nYb: s.melt.nYb,
       tofApparent: hold > 0 && s.melt.nYb > 0 ? (tot * 1e-6) / (s.melt.nYb * hold * 60) : null,
       tofLOD: hold > 0 && s.melt.nYb > 0 ? ((0.02 * (s.p.acidVol / 1000) / 14.007) * 1e-3) / (s.melt.nYb * hold * 60) : null };
     s.sop.done.analyse = true;
-    event(s, "ok", `Indophenol: AB-507 ${a1.below ? "< LOD" : a1.meas.toFixed(3) + " mg N/L"}, AB-508 ${a2.below ? "< LOD" : a2.meas.toFixed(3) + " mg N/L"}.`);
+    event(s, "ok", `Indophenol: AB-507 ${a1.below ? "< LOD" : a1.meas.toFixed(3) + " mg N/L"}.`);
     return s.analysis;
   }
 
   function freshTraps(s) {
     const p = s.p, Ta = p.Tamb + 273.15;
-    s.liq.sb = { acid: 0, oil: 0, nh3: 0, cap: 250, tip: 250 };
+    s.liq.ln = { acid: 0, oil: 0, nh3: 0, cap: 15 };
     s.liq.a1 = { acid: p.acidVol, oil: 0, nh3: 0, cap: 250, tip: 15, h2so4: p.acidVol / 1000 * p.acidMolar };
-    s.liq.a2 = { acid: p.acidVol, oil: 0, nh3: 0, cap: 250, tip: 15, h2so4: p.acidVol / 1000 * p.acidMolar };
-    s.liq.bb = { acid: 0, oil: p.oilVol, nh3: 0, cap: 250, tip: 15 };
-    ["sb", "a1", "a2", "bb"].forEach((k) => { const V = (250 - (k === "sb" ? 0 : 100)) * 1e-6; s.N[k] = node(V, Ta, PATM, AIR); });
+    s.N.ln = node(15e-6, Ta, PATM, AIR); s.N.a1 = node((250 - p.acidVol) * 1e-6, Ta, PATM, AIR);
+    s.made.slip = 0; s.yLiquid = 0;
     s.suckback = false; delete s.alarms.suck; delete s.alarms.sbOver;
     s.analysis = null; s.sop.done.analyse = false;
-    event(s, "info", "Fresh acid in AB-507 / AB-508, SB-506 emptied.");
+    event(s, "info", "Fresh acid in AB-507.");
   }
 
   function openReactor(s) {
@@ -532,7 +533,7 @@
     return A;
   }
 
-  const api = { create, reset, step, advance, readings, analyse, freshTraps, openReactor, demoScript, defaults, meltProps, press, frac, SP, SCCM, PATM };
+  const api = { create, reset, step, advance, readings, analyse, freshTraps, openReactor, demoScript, setMelt, defaults, meltProps, press, frac, SP, SCCM, PATM };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.AmmoniaSim = api;
 })(typeof window !== "undefined" ? window : globalThis);

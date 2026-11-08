@@ -15,8 +15,8 @@ for (const mode of ["nitride", "tof", "release"]) {
   const r = S.readings(s), a = s.analysis;
   ok(finished, `${mode}: procedure completes (${(s.t / 60).toFixed(0)} min)`);
   ok(Object.values(s.alarms).length === 0, `${mode}: no alarms left active`);
-  const balance = Math.abs(r.made - r.cap1 - r.cap2 - r.nh3ppm * 1e-6 * 0) <= 0.05 * r.made + 0.05;
-  ok(balance, `${mode}: NH3 made ${r.made.toFixed(2)} µmol, caught ${(r.cap1 + r.cap2).toFixed(2)} µmol`);
+  const balance = Math.abs(r.made - r.cap1 - r.slip) <= 0.05 * r.made + 0.05;
+  ok(balance, `${mode}: NH3 made ${r.made.toFixed(2)} µmol, caught ${r.cap1.toFixed(2)} µmol, slipped to vent ${r.slip.toFixed(3)} µmol`);
   console.log(`      AB-507 ${a.a1.below ? "<LOD" : a.a1.meas.toFixed(3)} mg N/L, apparent TOF ${a.tofApparent.toExponential(2)}, LOD TOF ${a.tofLOD.toExponential(1)}`);
 }
 { const s = S.create(); s.v.HV601 = true; s.v.pump = true; s.v.NV401 = 20;
@@ -27,6 +27,8 @@ for (const mode of ["nitride", "tof", "release"]) {
   ok(s.sop.leak.state === "fail", "worn gasket fails the leak-up test"); }
 { const s = S.create(); s.v.cylH2 = true; s.v.XV101 = true; s.sp.FIC101 = 100; s.v.HV111 = true; s.v.HV202 = true; s.v.NV401 = 50; S.advance(s, 900);
   ok(s.events.some((e) => e.text.startsWith("FLAMMABLE")), "H2 into an unpurged reactor raises the flammable alarm"); }
+{ const s = S.create({ mode: "tof" }); const n0 = s.melt.nYb; S.setMelt(s, 100, 5);
+  ok(Math.abs(s.melt.nYb / n0 - 2) < 1e-9 && Math.abs(s.yb.metal / n0 - 2) < 1e-9, "doubling the catalyst charge doubles the Yb inventory"); }
 { const s = S.create(); s.v.furnace = true; s.sp.furnaceSP = 400; S.advance(s, 3 * 3600);
   ok(P(s) > 130, `heating a sealed reactor pressurises it (${P(s).toFixed(0)} kPa)`); }
 console.log(fail ? `${fail} check(s) failed` : "all checks passed");
