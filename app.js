@@ -10,7 +10,7 @@ let s = S.create({});
 let running = true, speed = 60, demo = null, demoIdx = 0, anim = 0;
 const params = () => ({
   mode: $("sMode").value, logTOF: +$("iTOF").value, Ea: +$("iEa").value, storePct: +$("iStore").value,
-  nitrideTau: +$("iTau").value, meltMass: +$("iMass").value,
+  nitrideTau: +$("iTau").value, meltMass: +$("iMass").value, actPct: +$("iAct").value,
   fLeak: $("fLeak").checked, fCV505: $("fCV505").checked, fFIC101: $("fFIC101").checked, fPower: $("fPower").checked
 });
 const powerOK = () => !s.p.fPower && !s.v.esd;
@@ -30,6 +30,7 @@ function txt(x, y, str, cls, parent, anchor, style) {
 }
 const mk = (tag) => { const g = document.createElementNS(NS, tag); svg.appendChild(g); return g; };
 const gBack = mk("g"), gWire = mk("g"), gPipe = mk("g"), gFront = mk("g"), gBub = mk("g");
+gBub.setAttribute("pointer-events", "none"); gWire.setAttribute("pointer-events", "none");
 
 const C = { H2: [91, 79, 196], N2: [47, 138, 87], Ar: [64, 78, 86], NH3: [176, 65, 143], O2: [217, 138, 28] };
 function gasColour(x) {
@@ -174,7 +175,7 @@ const fS1 = flowTag(745, 288, "end"), fS2 = flowTag(600, 88), fHS = flowTag(760,
 /* furnace and reactor (back layer, so the dip tubes show in front) */
 const furn = el("g", { "aria-label": "Furnace H-201" }, gBack);
 const furnBody = el("rect", { x: 695, y: 425, width: 210, height: 225, rx: 6, fill: "#fdf1e6", stroke: "#b8692e", "stroke-width": 1.6, class: "vb" }, furn);
-const glow = el("rect", { x: 702, y: 432, width: 196, height: 211, rx: 4, fill: "#ff7a2f", opacity: 0 }, furn);
+const glow = el("rect", { x: 702, y: 432, width: 196, height: 211, rx: 4, fill: "#ff7a2f", opacity: 0, "pointer-events": "none" }, furn);
 for (let i = 0; i < 7; i++) {
   const yy = 450 + i * 27;
   el("path", { d: `M708 ${yy - 6} L716 ${yy} L708 ${yy + 6}`, fill: "none", stroke: "#d0503a", "stroke-width": 1.3 }, furn);
@@ -182,9 +183,11 @@ for (let i = 0; i < 7; i++) {
 }
 txt(800, 668, "H-201 furnace", "tag", furn);
 clickable(furn, "furnace");
-el("rect", { x: 730, y: 360, width: 140, height: 255, rx: 6, fill: "#f4f6f7", stroke: "var(--ink)", "stroke-width": 2 }, gBack);
-const headspace = el("rect", { x: 733, y: 363, width: 134, height: 249, rx: 4, fill: "#fff", opacity: 0.3 }, gBack);
-el("rect", { x: 715, y: 345, width: 170, height: 15, fill: "#c9d1d3", stroke: "var(--ink)", "stroke-width": 1.4 }, gBack);
+const vesselG = el("g", { "aria-label": "R-201: set the catalyst" }, gBack);
+el("rect", { x: 730, y: 360, width: 140, height: 255, rx: 6, fill: "#f4f6f7", stroke: "var(--ink)", "stroke-width": 2, class: "vb" }, vesselG);
+clickable(vesselG, "melt");
+const headspace = el("rect", { x: 733, y: 363, width: 134, height: 249, rx: 4, fill: "#fff", opacity: 0.3, "pointer-events": "none" }, vesselG);
+el("rect", { x: 715, y: 345, width: 170, height: 15, fill: "#c9d1d3", stroke: "var(--ink)", "stroke-width": 1.4 }, vesselG);
 const meltG = el("g", { "aria-label": "Catalyst melt" }, gBack);
 const melt = el("rect", { x: 753, y: 566, width: 94, height: 35, fill: "#8a8f93" }, meltG);
 const meltSurf = el("line", { x1: 753, y1: 566, x2: 847, y2: 566, stroke: "#c9d1d3", "stroke-width": 2 }, meltG);
@@ -346,7 +349,7 @@ function closePop() { pop.hidden = true; popId = null; }
 document.addEventListener("click", (e) => { if (!pop.hidden && !pop.contains(e.target)) closePop(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !pop.hidden) closePop(); });
 const head = (t) => `<h3><span>${t}</span><button class="x" type="button" aria-label="Close" data-close>×</button></h3>`;
-const rng = (id, lab, min, max, step, val, unit) => `<label>${lab} <output id="po_${id}">${val} ${unit}</output><input type="range" id="pi_${id}" min="${min}" max="${max}" step="${step}" value="${val}"></label>`;
+const rng = (id, lab, min, max, step, val, unit) => `<label>${lab} <span class="num"><input type="number" id="po_${id}" min="${min}" max="${max}" step="${step}" value="${val}" aria-label="${lab}, ${unit}"> ${unit}</span><input type="range" id="pi_${id}" min="${min}" max="${max}" step="${step}" value="${val}" aria-label="${lab}"></label>`;
 function popHTML(id) {
   if (ONOFF[id]) {
     const [t, k, d] = ONOFF[id], on = !!s.v[k];
@@ -358,7 +361,7 @@ function popHTML(id) {
   if (id === "FIC-102") return head("FIC-102 · N₂ MFC") + `<div class="st">Set point from U6 DAC1; flow read back on AIN5.</div>` + rng("sp", "Set point", 0, 100, 1, s.sp.FIC102, "sccm") + `<div class="live" id="poLive"></div>`;
   if (id === "FI-104") return head("FI-104 · Ar rotameter") + `<div class="st">Manual needle on the rotameter. Not logged.</div>` + rng("sp", "Flow", 0, 500, 5, s.sp.FI104, "sccm") + `<div class="live" id="poLive"></div>`;
   if (id === "furnace") return head("H-201 furnace") + `<div class="st">Stand-alone furnace controller TIC-201. TE-201 in the melt reads lower than the furnace.</div><div class="row2"><button type="button" data-set="1" class="${s.v.furnace ? "on" : ""}">On</button><button type="button" data-set="0" class="${s.v.furnace ? "" : "on"}">Off</button></div>` + rng("sp", "Set point", 25, 600, 5, s.sp.furnaceSP, "°C") + `<div class="live" id="poLive"></div>`;
-  if (id === "melt") return head("Catalyst in R-201") + `<div class="st">Liquid-metal catalyst in the MgO crucible.</div>` + rng("mass", "Charge", 10, 150, 5, s.p.meltMass, "g") + `<div class="live" id="poLive"></div>`;
+  if (id === "melt") return head("Catalyst in R-201") + `<div class="st">Liquid-metal catalyst in the MgO crucible.</div>` + rng("mass", "Catalyst charge", 5, 150, 1, s.p.meltMass, "g") + rng("act", "Active material", 0, 20, 0.5, s.p.actPct, "%") + `<div class="live" id="poLive"></div>`;
   return head(id);
 }
 function wirePop(id) {
@@ -369,16 +372,25 @@ function wirePop(id) {
     pop.querySelectorAll("[data-set]").forEach((x) => x.classList.toggle("on", x === b));
     refreshToggles();
   }));
-  const bind = (rid, fn, unit, dec) => { const i = $("pi_" + rid); if (!i) return; i.addEventListener("input", () => { fn(+i.value); $("po_" + rid).textContent = (+i.value).toFixed(dec || 0) + " " + unit; syncSliders(); }); };
+  // slider and typed value stay in step; fn gets the value, done() runs once the value is settled
+  const bind = (rid, fn, unit, dec, done) => {
+    const r = $("pi_" + rid), n = $("po_" + rid); if (!r) return;
+    r.addEventListener("input", () => { n.value = (+r.value).toFixed(dec || 0); fn(+r.value); syncSliders(); });
+    r.addEventListener("change", () => { if (done) done(); });
+    n.addEventListener("change", () => {
+      let v = +n.value; if (!isFinite(v)) v = +r.value;
+      v = Math.min(+n.max, Math.max(+n.min, v)); n.value = v; r.value = v; fn(v); syncSliders(); if (done) done();
+    });
+  };
   if (id === "NV-401") bind("nv", (v) => { s.v.NV401 = v; }, "%");
   if (id === "FIC-101") bind("sp", (v) => { s.sp.FIC101 = v; }, "sccm");
   if (id === "FIC-102") bind("sp", (v) => { s.sp.FIC102 = v; }, "sccm");
   if (id === "FI-104") bind("sp", (v) => { s.sp.FI104 = v; }, "sccm");
   if (id === "furnace") bind("sp", (v) => { s.sp.furnaceSP = v; }, "°C");
   if (id === "melt") {
-    const apply = () => { $("iMass").value = +$("pi_mass").value; setCatalyst(); };
-    $("pi_mass").addEventListener("change", apply);
-    bind("mass", () => {}, "g");
+    const apply = () => { $("iMass").value = +$("pi_mass").value; $("iAct").value = +$("pi_act").value; setCatalyst(); livePop(); };
+    bind("mass", () => {}, "g", 0, apply);
+    bind("act", () => {}, "%", 1, apply);
   }
   livePop();
 }
@@ -392,7 +404,7 @@ function livePop() {
   else if (id === "FIC-102") t = `PV ${f.FIC102.toFixed(1)} sccm · DAC1 ${(s.sp.FIC102 / 20).toFixed(2)} V · AIN5 ${(f.FIC102 / 20).toFixed(3)} V`;
   else if (id === "FI-104") t = `${f.FI104.toFixed(0)} sccm Ar into the header`;
   else if (id === "furnace") t = `PV ${(s.th.Tf - 273.15).toFixed(0)} °C · heater ${(s.th.Pw / 1000).toFixed(2)} kW · melt ${(s.th.Tm - 273.15).toFixed(0)} °C`;
-  else if (id === "melt") t = `${s.p.meltMass} g · depth ${(s.melt.depth * 1000).toFixed(1)} mm · ${meltState()}`;
+  else if (id === "melt") t = `active material ${(s.p.meltMass * s.p.actPct / 100).toFixed(2)} g of ${s.p.meltMass} g · depth ${(s.melt.depth * 1000).toFixed(1)} mm · ${meltState()}`;
   else if (id === "pump") t = `${f.pump.toFixed(0)} sccm · suction ${(S.press(s.N.y) / 1000).toFixed(1)} kPa`;
   else if (id === "HV-201") t = `S1 ${f.S1.toFixed(1)} sccm · PT-201 ${(S.press(s.N.hdr) / 1000).toFixed(1)} kPa`;
   else if (id === "HV-205") t = `S2 ${f.S2.toFixed(1)} sccm`;
@@ -426,17 +438,19 @@ const SL = [
   ["iEa", "oEa", (v) => { s.p.Ea = v; return v + " kJ/mol"; }],
   ["iStore", "oStore", (v) => { s.p.storePct = v; return v.toFixed(1) + " %"; }],
   ["iTau", "oTau", (v) => { s.p.nitrideTau = v; return v + " min"; }],
-  ["iMass", "oMass", (v) => v + " g"]
+  ["iMass", "oMass", (v) => v + " g"],
+  ["iAct", "oAct", (v) => v.toFixed(1) + " %"]
 ];
 SL.forEach(([i, o, f]) => { $(i).addEventListener("input", () => { $(o).textContent = f(+$(i).value); }); });
 SL.slice(5).forEach(([i, o, f]) => { $(o).textContent = f(+$(i).value); });
 function setCatalyst() {
-  S.setMelt(s, +$("iMass").value, s.p.actPct);
-  $("oMass").textContent = $("iMass").value + " g";
+  S.setMelt(s, +$("iMass").value, +$("iAct").value);
+  $("oMass").textContent = $("iMass").value + " g"; $("oAct").textContent = (+$("iAct").value).toFixed(1) + " %";
   meltNote();
 }
-function meltNote() { $("oMelt").textContent = `Melt about ${(s.melt.depth * 1000).toFixed(1)} mm deep in the crucible.`; }
+function meltNote() { $("oMelt").textContent = `Active material ${(s.p.meltMass * s.p.actPct / 100).toFixed(2)} g of ${s.p.meltMass} g; melt about ${(s.melt.depth * 1000).toFixed(1)} mm deep. You can also click the reactor in the drawing.`; }
 $("iMass").addEventListener("change", setCatalyst);
+$("iAct").addEventListener("change", setCatalyst);
 function syncSliders() {
   const set = (id, v) => { if (document.activeElement !== $(id)) $(id).value = v; };
   set("iFIC101", s.sp.FIC101); set("iFIC102", s.sp.FIC102); set("iFI104", s.sp.FI104); set("iNV", s.v.NV401); set("iTsp", s.sp.furnaceSP);
@@ -645,7 +659,7 @@ function updateScene(rd) {
   meltSurf.setAttribute("y1", 601 - depthPx); meltSurf.setAttribute("y2", 601 - depthPx);
   melt.setAttribute("fill", s.fL >= 1 ? `rgb(${Math.round(150 + 80 * hot)},${Math.round(160 - 30 * hot)},${Math.round(170 - 80 * hot)})` : s.fL > 0 ? "#9fa6aa" : "#8a8f93");
   meltSurf.setAttribute("stroke", s.fL > 0 ? "#e6ecee" : "#a7aeb2");
-  meltLab.textContent = `${s.p.meltMass} g catalyst · ${meltState()}`;
+  meltLab.textContent = `${s.p.meltMass} g catalyst · ${s.p.actPct} % active · ${meltState()}  ✎`;
   headspace.setAttribute("fill", gasColour(comp("rx")));
   headspace.setAttribute("opacity", Math.min(0.35, S.press(N.rx) / 101325 * 0.3));
   plugMark.S1.textContent = s.spg.S1.plugged ? "S1 plugged" : ""; plugMark.S2.textContent = s.spg.S2.plugged ? "S2 plugged" : "";
