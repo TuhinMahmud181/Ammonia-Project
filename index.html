@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ammonia Kinetics Rig · Virtual Lab</title>
+<meta name="description" content="Interactive simulation of a bench-scale liquid-metal (Yb–Bi–Sn) ammonia synthesis kinetics rig, from gas cylinders to vent, following the rig P&ID.">
+<style>
+:root {
+  /* Same lab-bench instrument-panel language as the ZLDD virtual lab. */
+  --paper: #eef2f1;
+  --panel: #ffffff;
+  --ink: #18262c;
+  --muted: #5b6b71;
+  --line: #d4dcdb;
+  --accent: #0d6f8f;
+  --sun: #d98a1c;
+  --hot: #c4472f;
+  --ok: #2f8a57;
+  --lcd-bg: #1b2a22;
+  --lcd-ink: #b8f07a;
+  --h2: #5b4fc4;
+  --n2: #2f8a57;
+  --ar: #7d8a8f;
+  --nh3: #b0418f;
+  --o2: #d98a1c;
+  --font-body: "Instrument Sans", "Segoe UI", Roboto, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.45; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.back { font-size: 13px; margin-bottom: 6px; }
+.back a { color: var(--accent); text-decoration: none; }
+.back a:hover { text-decoration: underline; }
+.byline { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.wrap { max-width: 1560px; margin: 0 auto; padding: 18px 20px 40px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.wrap > *, .top > *, .bottom > *, .col > *, .side > * { min-width: 0; }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+header p { margin: 4px 0 0; color: var(--muted); max-width: 78ch; }
+.pills { display: flex; gap: 8px; flex-wrap: wrap; }
+.pill { font-family: var(--font-mono); font-size: 13px; padding: 5px 10px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.pill.run { border-color: var(--ok); color: var(--ok); }
+.pill.warn { border-color: var(--sun); color: #9a5c06; background: #fff6e8; }
+.pill.bad { border-color: var(--hot); color: var(--hot); background: #fdeeea; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+.top { display: grid; grid-template-columns: minmax(0, 1fr) 370px; gap: 16px; align-items: start; }
+.scene { padding: 0; overflow: hidden; position: relative; }
+.scene svg { display: block; width: 100%; height: auto; user-select: none; }
+.scene .cap { padding: 8px 14px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.key { display: inline-flex; align-items: center; gap: 6px; }
+.key i { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+#scene text { font-family: var(--font-body); fill: var(--ink); }
+#scene text.mono { font-family: var(--font-mono); }
+#scene text.tag { font-size: 12px; font-weight: 600; }
+#scene text.small { font-size: 10.5px; fill: var(--muted); }
+#scene .click { cursor: pointer; }
+#scene .click:hover .vb { stroke: var(--sun); stroke-width: 2.4; }
+#scene .click:focus { outline: none; }
+#scene .click:focus-visible .vb { stroke: var(--sun); stroke-width: 3; }
+#tip { position: absolute; pointer-events: none; background: var(--ink); color: #fff; padding: 8px 10px; border-radius: 8px; font-size: 12.5px; max-width: 280px; opacity: 0; transition: opacity .12s; z-index: 5; }
+#tip b { font-family: var(--font-mono); }
+#tip .v { font-family: var(--font-mono); font-size: 15px; color: var(--lcd-ink); }
+.side { display: grid; gap: 16px; }
+.lcd { background: var(--lcd-bg); color: var(--lcd-ink); border-radius: 8px; padding: 10px 12px; font-family: var(--font-mono); font-size: 13px; display: grid; gap: 2px; border: 3px solid #2f3a3e; box-shadow: inset 0 0 18px rgba(0,0,0,.35); }
+.lcd .row { display: grid; grid-template-columns: 70px 1fr auto; gap: 8px; font-variant-numeric: tabular-nums; }
+.lcd .row span:first-child { color: #7fbf55; }
+.lcd .row span:last-child { text-align: right; }
+.lcd .foot { margin-top: 6px; color: #7fbf55; display: flex; justify-content: space-between; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+button, select { font: inherit; font-size: 13px; padding: 7px 12px; border-radius: 7px; border: 1px solid var(--line); background: #f6f8f8; color: var(--ink); cursor: pointer; }
+button:hover, select:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button.danger { border-color: var(--hot); color: var(--hot); font-weight: 600; }
+.tg button.danger[aria-pressed="true"] { background: var(--hot); color: #fff; border-color: var(--hot); }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--sun); outline-offset: 2px; }
+button:disabled { opacity: .5; cursor: default; }
+.tg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.tg button { font-family: var(--font-mono); font-size: 12px; padding: 6px 4px; }
+.tg button[aria-pressed="true"] { background: #e3f3ea; border-color: var(--ok); color: #1d5e3a; font-weight: 600; }
+.ctl { display: grid; gap: 10px; margin-top: 10px; }
+.ctl label { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 13px; }
+.ctl label output { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 600; }
+.ctl input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+.ctl .sub { font-size: 12px; color: var(--muted); grid-column: 1 / -1; }
+.ctl select { font-family: var(--font-mono); font-size: 13px; padding: 5px 8px; }
+.ctl .chk { display: flex; gap: 8px; align-items: flex-start; grid-template-columns: none; }
+.ctl .chk input { margin-top: 3px; accent-color: var(--hot); }
+details { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 10px; }
+summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+.msg { font-size: 12px; color: var(--ok); min-height: 16px; margin-top: 6px; }
+.alarms { display: grid; gap: 6px; margin-top: 8px; }
+.alarms div { font-size: 12.5px; padding: 6px 9px; border-radius: 7px; border-left: 4px solid var(--sun); background: #fff6e8; }
+.alarms div.alarm { border-left-color: var(--hot); background: #fdeeea; }
+.demo { font-size: 12.5px; color: var(--muted); margin-top: 8px; min-height: 18px; }
+.demo b { color: var(--ink); }
+.kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; border-top: 3px solid var(--accent); }
+.kpi.sun { border-top-color: var(--sun); }
+.kpi.hot { border-top-color: var(--hot); }
+.kpi.nh3 { border-top-color: var(--nh3); }
+.kpi .lab { font-size: 12px; color: var(--muted); }
+.kpi .num { font-family: var(--font-mono); font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpi .num small { font-size: 13px; color: var(--muted); font-weight: 400; margin-left: 3px; }
+.kpi .note { font-size: 12px; color: var(--muted); }
+.charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.chart h3 { font-size: 14px; font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin: 6px 0 4px; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.legend i.dash { background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px) !important; height: 2px; }
+canvas { width: 100%; height: 220px; display: block; }
+.bottom { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.col { display: grid; gap: 16px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { font-size: 12px; color: var(--muted); font-weight: 500; }
+.sop { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; counter-reset: s; }
+.sop li { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; font-size: 13px; }
+.sop li::before { counter-increment: s; content: counter(s); width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--line); display: grid; place-items: center; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.sop li.done::before { content: "✓"; background: var(--ok); border-color: var(--ok); color: #fff; }
+.sop li.now::before { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.sop li span { color: var(--muted); font-size: 12px; display: block; }
+.events { max-height: 260px; overflow-y: auto; margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 12.5px; }
+.events div { padding: 5px 9px; border-bottom: 1px solid #eef1f1; display: grid; grid-template-columns: 52px 1fr; gap: 8px; }
+.events div b { font-family: var(--font-mono); font-weight: 500; color: var(--muted); }
+.events .warn { background: #fff8ec; }
+.events .alarm { background: #fdeeea; }
+.events .ok { color: #1d5e3a; }
+.manual { max-height: 240px; overflow: auto; margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; }
+.manual table { font-family: var(--font-mono); font-size: 12px; }
+.manual th { position: sticky; top: 0; background: #fbfaf5; }
+.res { margin-top: 10px; font-size: 13px; }
+.res .big { font-family: var(--font-mono); font-size: 15px; }
+.notes ul { margin: 8px 0 0; padding-left: 18px; }
+.notes li { margin: 4px 0; max-width: 78ch; }
+.notes p { margin: 8px 0 0; color: var(--muted); max-width: 78ch; }
+#csvBox { width: 100%; height: 120px; font-family: var(--font-mono); font-size: 11px; margin-top: 8px; display: none; }
+@media (max-width: 1150px) {
+  .top, .bottom { grid-template-columns: 1fr; }
+  .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .svgwrap { overflow-x: auto; }
+  .scene svg { min-width: 980px; }
+  .charts { grid-template-columns: 1fr; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wrap { padding: 12px 14px 32px; }
+}
+@media (prefers-reduced-motion: reduce) { #tip { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="back"><a href="https://tuhinmahmud181.github.io/">← Tuhin Mahmud</a></div>
+      <h1>Ammonia Kinetics Rig · Virtual Lab</h1>
+      <p>Bench rig for measuring ammonia synthesis over a molten Yb–Bi–Sn catalyst, from the gas cylinders to the vent, drawn from the rig P&amp;ID (PID-002, simplified). Open the valves, run the furnace, purge, fill, hold, release through the acid traps, and analyse what was caught.</p>
+      <p class="byline">Tuhin Mahmud · Department of Chemical Engineering, BUET</p>
+    </div>
+    <div class="pills">
+      <span class="pill" id="pClock">0:00:00</span>
+      <span class="pill run" id="pState">Running</span>
+      <span class="pill" id="pSpeed">×60</span>
+      <span class="pill bad" id="pAlarm" hidden></span>
+    </div>
+  </header>
+
+  <div class="top">
+    <section class="card scene" aria-label="Live P&amp;ID of the rig">
+      <div class="svgwrap"><svg id="scene" viewBox="0 0 1500 690" role="img" aria-label="Process and instrumentation diagram of the rig, with clickable valves"></svg></div>
+      <div id="tip"></div>
+      <div class="cap">
+        <span>Click a valve, cylinder, pump or the furnace to operate it. Hover an instrument for its reading. Lines are coloured by the gas they hold; moving dashes show flow; pale dashed lines are under vacuum.</span>
+        <span class="key"><i style="background:var(--h2)"></i>H₂</span>
+        <span class="key"><i style="background:var(--n2)"></i>N₂</span>
+        <span class="key"><i style="background:var(--ar)"></i>Ar</span>
+        <span class="key"><i style="background:var(--o2)"></i>air</span>
+        <span class="key"><i style="background:var(--nh3)"></i>NH₃</span>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="card" id="alarmCard" hidden>
+        <h2>Active alarms</h2>
+        <div class="alarms" id="alarms"></div>
+      </div>
+
+      <div class="card">
+        <h2>Data logger · DAQ → PC</h2>
+        <div class="lcd" id="lcd" aria-live="off"></div>
+        <div class="btns">
+          <button class="primary" id="bPlay" type="button">Pause</button>
+          <button id="bReset" type="button">Restart run</button>
+          <select id="sSpeed" aria-label="Simulation speed">
+            <option value="1">×1 real time</option>
+            <option value="10">×10</option>
+            <option value="60" selected>×60 (1 h in 1 min)</option>
+            <option value="300">×300 (1 h in 12 s)</option>
+          </select>
+        </div>
+        <div class="btns">
+          <button id="bCopy" type="button">Copy logger CSV</button>
+          <button id="bCopyMan" type="button">Copy manual log</button>
+        </div>
+        <div class="msg" id="msg"></div>
+        <textarea id="csvBox" readonly aria-label="CSV text"></textarea>
+      </div>
+
+      <div class="card">
+        <h2>Auto-run the procedure</h2>
+        <div class="btns">
+          <button class="primary" id="bDemo" type="button">Run the full SOP</button>
+          <select id="sHold" aria-label="Hold time">
+            <option value="30">hold 30 min</option>
+            <option value="60" selected>hold 60 min</option>
+            <option value="120">hold 120 min</option>
+          </select>
+          <button id="bDemoStop" type="button" disabled>Stop</button>
+        </div>
+        <div class="demo" id="demo">Restarts the run and operates the rig step by step: leak test, three Ar purge cycles, heat, fill N₂ + H₂, hold, release, pump-down, Ar sweep, analysis.</div>
+      </div>
+
+      <div class="card">
+        <h2>Operator controls</h2>
+        <div class="tg" id="toggles"></div>
+        <div class="ctl">
+          <label for="iFIC101">FIC-101, H₂ set point <output id="oFIC101"></output>
+            <input type="range" id="iFIC101" min="0" max="100" step="1" value="0"></label>
+          <label for="iFIC102">FIC-102, N₂ set point <output id="oFIC102"></output>
+            <input type="range" id="iFIC102" min="0" max="100" step="1" value="0"></label>
+          <label for="iFI104">FI-104, Ar rotameter <output id="oFI104"></output>
+            <input type="range" id="iFI104" min="0" max="500" step="5" value="0"></label>
+          <label for="iNV">NV-401, outlet needle valve <output id="oNV"></output>
+            <input type="range" id="iNV" min="0" max="100" step="1" value="0">
+            <span class="sub">Open slowly. The traps are on the pump exhaust, so a wide-open NV-401 with P-601 running blows gas hard through the acid.</span></label>
+          <label for="iTsp">TIC-201, furnace set point <output id="oTsp"></output>
+            <input type="range" id="iTsp" min="25" max="600" step="5" value="220">
+            <span class="sub" id="oTspN">Furnace's own controller and thermocouple; TE-201 in the melt reads lower.</span></label>
+        </div>
+        <details>
+          <summary>Melt and chemistry (what happens inside)</summary>
+          <div class="ctl">
+            <label for="sMode">Kinetic hypothesis
+              <select id="sMode">
+                <option value="nitride">A · YbN sink (no NH₃)</option>
+                <option value="tof" selected>B · catalytic, set TOF</option>
+                <option value="release">C · store, release on pressure drop</option>
+              </select>
+              <span class="sub" id="modeNote"></span></label>
+            <label for="iTOF" data-mode="tof">TOF at 200 °C, per Yb atom <output id="oTOF"></output>
+              <input type="range" id="iTOF" min="-11" max="-3" step="0.5" value="-6"></label>
+            <label for="iEa" data-mode="tof">Apparent activation energy <output id="oEa"></output>
+              <input type="range" id="iEa" min="20" max="160" step="5" value="80"></label>
+            <label for="iStore" data-mode="release">Reactive-N capacity, % of Yb <output id="oStore"></output>
+              <input type="range" id="iStore" min="0.1" max="10" step="0.1" value="2"></label>
+            <label for="iTau" data-mode="nitride">YbN formation time constant <output id="oTau"></output>
+              <input type="range" id="iTau" min="5" max="240" step="5" value="30"></label>
+            <label for="iYb">Yb in the melt (needs restart) <output id="oYb"></output>
+              <input type="range" id="iYb" min="0" max="10" step="0.5" value="5">
+              <span class="sub">Bi:Sn kept at 57:38. 0 % gives a Bi–Sn blank.</span></label>
+            <label for="iMass">Melt charge (needs restart) <output id="oMass"></output>
+              <input type="range" id="iMass" min="10" max="100" step="5" value="50"></label>
+          </div>
+        </details>
+        <details>
+          <summary>Inject a fault (HAZOP deviations)</summary>
+          <div class="ctl">
+            <label class="chk"><input type="checkbox" id="fLeak"> <span>Worn flange gasket on R-201 (air leaks in under vacuum)</span></label>
+            <label class="chk"><input type="checkbox" id="fCV505"> <span>CV-505 passing (check valve stuck open)</span></label>
+            <label class="chk"><input type="checkbox" id="fFIC101"> <span>FIC-101 fails fully open (100 sccm H₂)</span></label>
+            <label class="chk"><input type="checkbox" id="fPower"> <span>Mains power failure</span></label>
+          </div>
+        </details>
+      </div>
+    </aside>
+  </div>
+
+  <section class="kpis" aria-label="Summary">
+    <div class="kpi"><div class="lab">Reactor pressure, PT-301</div><div class="num" id="kP">0<small>kPa</small></div><div class="note" id="kPN"></div></div>
+    <div class="kpi hot"><div class="lab">Melt, TE-201</div><div class="num" id="kT">0<small>°C</small></div><div class="note" id="kTN"></div></div>
+    <div class="kpi sun"><div class="lab">O₂ in R-201</div><div class="num" id="kO2">0<small>ppm</small></div><div class="note" id="kO2N"></div></div>
+    <div class="kpi nh3"><div class="lab">NH₃ formed (model)</div><div class="num" id="kMade">0<small>µmol</small></div><div class="note" id="kMadeN"></div></div>
+    <div class="kpi nh3"><div class="lab">NH₃ in acid traps</div><div class="num" id="kCap">0<small>µmol</small></div><div class="note" id="kCapN"></div></div>
+    <div class="kpi"><div class="lab">Yb still metallic</div><div class="num" id="kYb">100<small>%</small></div><div class="note" id="kYbN"></div></div>
+  </section>
+
+  <section class="charts">
+    <div class="card chart"><h3>Pressures</h3><div class="legend" id="lg1"></div><canvas id="c1" aria-label="Pressure chart"></canvas></div>
+    <div class="card chart"><h3>Temperatures</h3><div class="legend" id="lg2"></div><canvas id="c2" aria-label="Temperature chart"></canvas></div>
+    <div class="card chart"><h3>Gas in R-201</h3><div class="legend" id="lg3"></div><canvas id="c3" aria-label="Reactor gas composition chart"></canvas></div>
+    <div class="card chart"><h3>Ammonia, cumulative</h3><div class="legend" id="lg4"></div><canvas id="c4" aria-label="Ammonia chart"></canvas></div>
+  </section>
+
+  <div class="bottom">
+    <div class="col">
+      <section class="card">
+        <h2>Run sequence</h2>
+        <ol class="sop" id="sop"></ol>
+      </section>
+      <section class="card">
+        <h2>Acid traps · indophenol analysis</h2>
+        <div class="btns">
+          <button class="primary" id="bAnalyse" type="button">Sample and analyse AB-507 / AB-508</button>
+          <button id="bFresh" type="button">Fresh acid traps</button>
+          <button id="bOpen" type="button">Cool, open R-201 (service)</button>
+        </div>
+        <div class="res" id="res">Run the hold and the sweep first, then analyse. Detection limit 0.02 mg N/L.</div>
+      </section>
+    </div>
+    <div class="col">
+      <section class="card">
+        <h2>Event log</h2>
+        <div class="events" id="events"></div>
+      </section>
+      <section class="card">
+        <h2>Manual log sheet · every 5 min</h2>
+        <div class="manual">
+          <table>
+            <thead><tr><th>Time</th><th>PT-201 kPa</th><th>PT-301 kPa</th><th>TE-201 °C</th><th>TIC °C</th><th>FIC-101</th><th>FIC-102</th><th>FI-104</th></tr></thead>
+            <tbody id="manual"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <section class="card notes">
+    <h2>What this simulation is</h2>
+    <ul>
+      <li>A lumped dynamic model of the rig in PID-002 (simplified): H₂, N₂ and Ar cylinders with regulators; FIC-101 / FIC-102 mass flow controllers and FI-104 rotameter; check valves; the H₂ line to sparger S2 and the N₂/Ar header to sparger S1 or the headspace; R-201 (SS316L, about 0.8 L) with an MgO crucible in the furnace H-201; PSV-301; the outlet needle valve NV-401; the vacuum pump P-601 with its CV-505 bypass; the empty suck-back bottle SB-506, two dilute H₂SO₄ traps AB-507 / AB-508 and the oil bubbler BB-509, venting outdoors.</li>
+      <li>Each gas volume is a well-mixed node holding H₂, N₂, Ar, NH₃ and O₂ as ideal gas. Flows are driven by pressure difference through valve conductances, with bubbler liquid heads, the melt's hydrostatic head at the sparger tips, one-way check valves, and a capped explicit step so any valve line-up stays stable.</li>
+      <li>Heat: the furnace (1.4 kW) runs on its own controller; the reactor and melt lag it by about 10 minutes and sit a little cooler. The melt is solid below 125 °C (DSC onset), mushy to the liquidus, and only lets gas through the spargers when liquid. Headspace gas heats with the melt, so a sealed reactor pressurises as it warms.</li>
+      <li>Chemistry is the unknown the rig is built to measure, so it is a choice, not a prediction. A: YbN forms and is too stable to give NH₃ (the thermodynamic result). B: catalytic NH₃ at a turnover frequency you set, with an Arrhenius term and the equilibrium limit. C: reactive N builds up in the melt under N₂ + H₂ and comes out as NH₃ when the pressure drops (the reported observation). Any O₂ that gets in oxidises the hot Yb.</li>
+      <li>NH₃ capture in the acid falls off at high gas flow and when the acid is used up. The indophenol result carries about 3 % noise and a 0.02 mg N/L detection limit; the page also reports the smallest turnover frequency this run could have seen.</li>
+      <li>Hazards from the HAZOP draft are live: acid suck-back, reverse flow through a stopped pump, H₂ with air, feeding into a solid melt, a sparger freezing shut after a power cut, over-pressure and PSV lift, opening a hot reactor, and a failed leak-up test.</li>
+    </ul>
+    <p>All set points, volumes and rate constants are provisional design values. Use the page to rehearse the procedure, check valve line-ups, train operators, and see what each kinetic hypothesis would look like in PT-301 and in the acid traps. It does not predict the real kinetics; the measured data will.</p>
+  </section>
+</div>
+
+<script src="sim.js"></script>
+<script>
+(function () {
+"use strict";
+const S = window.AmmoniaSim;
+const $ = (id) => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+let s = S.create({});
+let running = true, speed = 60, demo = null, demoIdx = 0;
+const params = () => ({
+  mode: $("sMode").value, logTOF: +$("iTOF").value, Ea: +$("iEa").value, storePct: +$("iStore").value,
+  nitrideTau: +$("iTau").value, ybAt: +$("iYb").value, meltMass: +$("iMass").value,
+  fLeak: $("fLeak").checked, fCV505: $("fCV505").checked, fFIC101: $("fFIC101").checked, fPower: $("fPower").checked
+});
+
+/* ---------------- SVG helpers ---------------- */
+const svg = $("scene");
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  (parent || svg).appendChild(e);
+  return e;
+}
+function txt(x, y, str, cls, parent, anchor) {
+  const t = el("text", { x, y, class: cls || "", "text-anchor": anchor || "middle" }, parent);
+  t.textContent = str; return t;
+}
+
+const C = { H2: [91, 79, 196], N2: [47, 138, 87], Ar: [125, 138, 143], NH3: [176, 65, 143], O2: [217, 138, 28] };
+function gasColour(x) {
+  // x = [H2, N2, Ar, NH3, O2]; air shows as amber via its O2
+  const w = [x[0], x[1] - (x[4] > 0.01 ? x[4] * 3.7 : 0), x[2], x[3] * 30, x[4] * 4.7].map((v) => Math.max(0, v));
+  const tot = w.reduce((a, b) => a + b, 0) || 1;
+  const cs = [C.H2, C.N2, C.Ar, C.NH3, C.O2];
+  const rgb = [0, 1, 2].map((k) => Math.round(cs.reduce((a, c, i) => a + c[k] * w[i] / tot, 0)));
+  return `rgb(${rgb.join(",")})`;
+}
+const comp = (k) => { const nd = s.N[k]; return [0, 1, 2, 3, 4].map((i) => S.frac(nd, i)); };
+
+/* ---------------- static drawing ---------------- */
+const lines = [];   // {path, flow: () => sccm, node: key or fn}
+function pipe(d, nodeKey, flowFn) {
+  const base = el("path", { d, fill: "none", "stroke-width": 3, "stroke-linejoin": "round", "stroke-linecap": "round" });
+  const dash = el("path", { d, fill: "none", "stroke-width": 3, stroke: "#fff", "stroke-opacity": 0.85, "stroke-dasharray": "3 13", "stroke-linecap": "round" });
+  const L = { base, dash, nodeKey, flowFn, off: 0 };
+  lines.push(L); return L;
+}
+const supCol = (cyl, gas) => () => (s.v[cyl] ? gas : null);
+// supplies (cylinder to MFC)
+pipe("M62 128 V100 H270", "supH2");
+pipe("M62 328 V300 H270", "supN2");
+pipe("M62 498 V470 H270", "supAr");
+// H2 line
+pipe("M350 100 H460", "h2l", () => s.flows.FIC101);
+pipe("M460 100 H835 V586", "h2l", () => s.flows.S2);
+pipe("M460 100 V300", "h2l", () => s.flows.HV111);
+// N2, Ar into header
+pipe("M350 300 H460", "hdr", () => s.flows.FIC102);
+pipe("M350 470 H460 V300", "hdr", () => s.flows.FI104);
+// header to reactor
+pipe("M460 300 H620", "hdr", () => s.flows.S1 + s.flows.HV202);
+pipe("M620 300 H765 V586", "hdr", () => s.flows.S1);
+pipe("M620 300 V220 H812 V385", "hdr", () => s.flows.HV202);
+// outlet
+pipe("M860 352 V170 H1010", "rx", () => s.flows.NV401 + s.flows.psv);
+pipe("M950 170 V45", "rx", () => s.flows.psv);
+pipe("M950 45 H1478", "vent", () => s.flows.psv + s.flows.vent);
+pipe("M1010 170 H1170", "y", () => s.flows.CV505);
+pipe("M1060 170 V262 H1093", "y", () => s.flows.pump);
+pipe("M1137 262 H1170 V170", "sb", () => s.flows.pump);
+pipe("M1170 170 H1215 V226", "sb", () => s.flows.CV505 + s.flows.pump);
+pipe("M1235 226 V186 H1290 V318", "sb", () => s.flows.b1);
+pipe("M1310 218 V186 H1365 V318", "a1", () => s.flows.b2);
+pipe("M1385 218 V186 H1440 V318", "a2", () => s.flows.b3);
+pipe("M1460 218 V45", "bb", () => s.flows.vent);
+
+// arrow at vent
+el("path", { d: "M1478 39 L1492 45 L1478 51 Z", fill: "var(--ink)" });
+txt(1490, 30, "To outdoors, above head height", "small", null, "end");
+
+// cylinders
+const cyl = {};
+function cylinder(key, x, y, label, fill) {
+  const g = el("g", { class: "click", tabindex: 0, role: "button", "aria-label": `${label} cylinder valve` });
+  el("rect", { x: x - 22, y: y + 18, width: 44, height: 110, rx: 20, fill, stroke: "#5b6b71", "stroke-width": 1.5, class: "vb" }, g);
+  el("rect", { x: x - 6, y: y + 6, width: 12, height: 14, fill: "#c9d1d3", stroke: "#5b6b71" }, g);
+  const ind = el("circle", { cx: x, cy: y + 4, r: 6, stroke: "#5b6b71", "stroke-width": 1.5 }, g);
+  txt(x, y + 78, label, "tag", g);
+  const st = txt(x, y + 96, "shut", "small", g);
+  g.addEventListener("click", () => { s.v[key] = !s.v[key]; refreshToggles(); });
+  g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); g.dispatchEvent(new Event("click")); } });
+  cyl[key] = { ind, st };
+}
+cylinder("cylH2", 62, 110, "H₂", "#e3e0fb");
+cylinder("cylN2", 62, 310, "N₂", "#ddf2e4");
+cylinder("cylAr", 62, 480, "Ar", "#e9edee");
+
+// valve symbols
+const valves = {};
+function bowtie(x, y, vertical, g) {
+  const h = 9, w = 11;
+  const d = vertical ? `M${x - h} ${y - w} L${x + h} ${y - w} L${x - h} ${y + w} L${x + h} ${y + w} Z` : `M${x - w} ${y - h} L${x - w} ${y + h} L${x + w} ${y - h} L${x + w} ${y + h} Z`;
+  return el("path", { d, stroke: "var(--ink)", "stroke-width": 1.6, "stroke-linejoin": "round", class: "vb" }, g);
+}
+function valve(id, key, x, y, opt) {
+  opt = opt || {};
+  const g = el("g", { class: opt.passive ? "" : "click", tabindex: opt.passive ? -1 : 0, role: opt.passive ? "img" : "button", "aria-label": id });
+  el("rect", { x: x - 16, y: y - 16, width: 32, height: 32, fill: "transparent" }, g);
+  const b = bowtie(x, y, opt.vertical, g);
+  if (opt.solenoid) { el("line", { x1: x, y1: y, x2: x, y2: y - 20, stroke: "var(--ink)", "stroke-width": 1.4 }, g); el("rect", { x: x - 7, y: y - 33, width: 14, height: 13, fill: "#fff", stroke: "var(--ink)", "stroke-width": 1.4 }, g); txt(x, y - 22.5, "S", "small", g).setAttribute("style", "font-size:10px;fill:var(--ink)"); }
+  if (opt.needle) { el("line", { x1: x, y1: y, x2: x, y2: y - 18, stroke: "var(--ink)", "stroke-width": 1.6 }, g); el("line", { x1: x - 8, y1: y - 18, x2: x + 8, y2: y - 18, stroke: "var(--ink)", "stroke-width": 1.6 }, g); }
+  if (opt.reg) { el("line", { x1: x, y1: y, x2: x, y2: y - 14, stroke: "var(--ink)", "stroke-width": 1.4 }, g); el("path", { d: `M${x - 9} ${y - 14} A9 9 0 0 1 ${x + 9} ${y - 14} Z`, fill: "#fff", stroke: "var(--ink)", "stroke-width": 1.4 }, g); }
+  const lx = opt.lx !== undefined ? opt.lx : x, ly = opt.ly !== undefined ? opt.ly : y + 30;
+  txt(lx, ly, id, "tag mono", g, opt.anchor);
+  if (!opt.passive) {
+    g.addEventListener("click", () => {
+      if (key === "NV401") { $("iNV").focus(); $("iNV").scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" }); return; }
+      s.v[key] = !s.v[key]; refreshToggles();
+    });
+    g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); g.dispatchEvent(new Event("click")); } });
+  }
+  valves[id] = { b, key, g };
+  return g;
+}
+function check(x, y, label, ly) {
+  const g = el("g", {});
+  el("path", { d: `M${x - 9} ${y - 9} L${x - 9} ${y + 9} L${x + 7} ${y} Z`, fill: "var(--ink)" }, g);
+  el("line", { x1: x + 8, y1: y - 9, x2: x + 8, y2: y + 9, stroke: "var(--ink)", "stroke-width": 2.4 }, g);
+  txt(x, ly || y + 26, label, "tag mono", g);
+  return g;
+}
+function inst(tag, num, x, y, stemTo, tipFn, horiz) {
+  const g = el("g", { "data-tip": tag + "-" + num, class: "inst" });
+  if (stemTo !== undefined && stemTo !== null) {
+    if (horiz) el("line", { x1: x, y1: y, x2: stemTo, y2: y, stroke: "#5b6b71", "stroke-width": 1, "stroke-dasharray": horiz === "dash" ? "4 3" : "" }, g);
+    else el("line", { x1: x, y1: y + 16, x2: x, y2: stemTo, stroke: "#5b6b71", "stroke-width": 1.2 }, g);
+  }
+  el("circle", { cx: x, cy: y, r: 16, fill: "#fff", stroke: "var(--ink)", "stroke-width": 1.4 }, g);
+  el("line", { x1: x - 16, y1: y, x2: x + 16, y2: y, stroke: "var(--ink)", "stroke-width": 0.8 }, g);
+  txt(x, y - 3, tag, "mono", g).setAttribute("style", "font-size:10px;font-weight:700");
+  txt(x, y + 11, num, "mono", g).setAttribute("style", "font-size:9px");
+  tips[tag + "-" + num] = tipFn;
+  return g;
+}
+function box(id, x, y, w, h, tipKey) {
+  const g = el("g", { "data-tip": tipKey, class: "click", tabindex: 0, role: "button", "aria-label": id });
+  el("rect", { x, y, width: w, height: h, fill: "#fff", stroke: "var(--ink)", "stroke-width": 1.4, rx: 2, class: "vb" }, g);
+  txt(x + w / 2, y + 13, id, "mono", g).setAttribute("style", "font-size:11px;font-weight:700");
+  const v = txt(x + w / 2, y + 27, "", "mono", g); v.setAttribute("style", "font-size:10.5px;fill:var(--accent)");
+  return { g, v };
+}
+const tips = {};
+
+// gas panel
+valve("PCV-101", "cylH2", 130, 100, { reg: true, passive: true });
+valve("XV-101", "XV101", 215, 100, { solenoid: true });
+valve("PCV-102", "cylN2", 130, 300, { reg: true, passive: true });
+valve("PCV-104", "cylAr", 130, 470, { reg: true, passive: true });
+inst("PI", "101", 130, 55, null, () => s.v.cylH2 ? `${s.p.PregH2} kPa abs delivery` : "cylinder shut");
+inst("PI", "102", 130, 255, null, () => s.v.cylN2 ? `${s.p.PregN2} kPa abs delivery` : "cylinder shut");
+inst("PI", "104", 130, 425, null, () => s.v.cylAr ? `${s.p.PregAr} kPa abs delivery` : "cylinder shut");
+// stems from PI to regulators
+[[130, 71, 86], [130, 271, 286], [130, 441, 456]].forEach(([x, a, b]) => el("line", { x1: x, y1: a, x2: x, y2: b, stroke: "#5b6b71", "stroke-width": 1.2 }));
+const fic101 = box("FIC-101", 270, 82, 80, 36, "FIC-101");
+const fic102 = box("FIC-102", 270, 282, 80, 36, "FIC-102");
+const fi104 = box("FI-104", 270, 452, 80, 36, "FI-104");
+fic101.g.addEventListener("click", () => $("iFIC101").focus());
+fic102.g.addEventListener("click", () => $("iFIC102").focus());
+fi104.g.addEventListener("click", () => $("iFI104").focus());
+check(400, 100, "CV-101");
+check(400, 300, "CV-102");
+check(400, 470, "CV-104");
+valve("HV-111", "HV111", 460, 200, { vertical: true, lx: 474, ly: 204, anchor: "start" });
+valve("HV-205", "HV205", 560, 100);
+el("circle", { cx: 460, cy: 100, r: 3.5, fill: "var(--ink)" });
+el("circle", { cx: 460, cy: 300, r: 3.5, fill: "var(--ink)" });
+txt(446, 290, "X-1", "small");
+inst("PT", "201", 540, 255, 300, () => `${(S.press(s.N.hdr) / 1000).toFixed(1)} kPa abs, feed header`);
+el("circle", { cx: 620, cy: 300, r: 3.5, fill: "var(--ink)" });
+valve("HV-201", "HV201", 690, 300);
+valve("HV-202", "HV202", 690, 220);
+
+// furnace and reactor
+const furn = el("g", { class: "click", tabindex: 0, role: "button", "aria-label": "Furnace H-201 on or off" });
+const furnBody = el("rect", { x: 695, y: 425, width: 210, height: 225, rx: 6, fill: "#fdf1e6", stroke: "#b8692e", "stroke-width": 1.6, class: "vb" }, furn);
+const glow = el("rect", { x: 702, y: 432, width: 196, height: 211, rx: 4, fill: "#ff7a2f", opacity: 0 }, furn);
+for (let i = 0; i < 7; i++) {
+  const yy = 450 + i * 27;
+  el("path", { d: `M708 ${yy - 6} L716 ${yy} L708 ${yy + 6}`, fill: "none", stroke: "#d0503a", "stroke-width": 1.3 }, furn);
+  el("path", { d: `M892 ${yy - 6} L884 ${yy} L892 ${yy + 6}`, fill: "none", stroke: "#d0503a", "stroke-width": 1.3 }, furn);
+}
+txt(800, 668, "H-201 furnace", "tag", furn);
+furn.addEventListener("click", () => { s.v.furnace = !s.v.furnace; refreshToggles(); });
+furn.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); furn.dispatchEvent(new Event("click")); } });
+el("rect", { x: 730, y: 360, width: 140, height: 255, rx: 6, fill: "#f4f6f7", stroke: "var(--ink)", "stroke-width": 2 });
+const headspace = el("rect", { x: 733, y: 363, width: 134, height: 249, rx: 4, fill: "#fff", opacity: 0.35 });
+el("rect", { x: 715, y: 345, width: 170, height: 15, fill: "#c9d1d3", stroke: "var(--ink)", "stroke-width": 1.4 });
+el("path", { d: "M750 475 V598 Q750 604 756 604 H844 Q850 604 850 598 V475", fill: "none", stroke: "#8a5a2b", "stroke-width": 4 });
+const melt = el("rect", { x: 753, y: 566, width: 94, height: 35, fill: "#8a8f93" });
+const meltSurf = el("line", { x1: 753, y1: 566, x2: 847, y2: 566, stroke: "#c9d1d3", "stroke-width": 2 });
+txt(800, 590, "Yb–Bi–Sn", "small").setAttribute("style", "font-size:10px;fill:#fff");
+txt(892, 340, "R-201 reactor", "tag", null, "start");
+txt(766, 465, "S1", "small").setAttribute("style", "font-size:10px;fill:var(--h2)");
+txt(836, 465, "S2", "small").setAttribute("style", "font-size:10px;fill:var(--h2)");
+const bubblesG = el("g", {});
+el("line", { x1: 788, y1: 280, x2: 788, y2: 588, stroke: "#8a5a2b", "stroke-width": 2 });
+el("circle", { cx: 788, cy: 588, r: 3, fill: "var(--hot)" });
+inst("TE", "201", 788, 265, null, () => `${(s.th.Tm - 273.15).toFixed(1)} °C in the melt · ${meltState()}`);
+const ticG = inst("TIC", "201", 645, 540, 695, () => `Furnace PV ${(s.th.Tf - 273.15).toFixed(0)} °C, SP ${s.sp.furnaceSP} °C · heater ${(s.th.Pw / 1000).toFixed(2)} kW · ${s.v.furnace ? "ON" : "OFF"}`, "dash");
+const plugMark = { S1: txt(765, 620, "", "small"), S2: txt(835, 620, "", "small") };
+plugMark.S1.setAttribute("style", "font-size:10px;fill:var(--hot);font-weight:700");
+plugMark.S2.setAttribute("style", "font-size:10px;fill:var(--hot);font-weight:700");
+
+// outlet side
+const psvG = el("g", {});
+el("path", { d: "M941 103 L959 103 L941 127 L959 127 Z", fill: "#fff", stroke: "var(--ink)", "stroke-width": 1.6 }, psvG);
+el("path", { d: "M959 115 l6 -5 l4 10 l4 -10 l4 10", fill: "none", stroke: "var(--ink)", "stroke-width": 1.3 }, psvG);
+const psvLamp = el("circle", { cx: 935, cy: 115, r: 4, fill: "#e3e9e8" }, psvG);
+txt(925, 119, "PSV-301", "tag mono", psvG, "end");
+el("circle", { cx: 950, cy: 170, r: 3.5, fill: "var(--ink)" });
+txt(934, 162, "X-2", "small");
+inst("PT", "301", 950, 215, null, () => `${(S.press(s.N.rx) / 1000).toFixed(2)} kPa abs in R-201 · PSV set ${s.p.psvSet} kPa`);
+el("line", { x1: 950, y1: 170, x2: 950, y2: 199, stroke: "#5b6b71", "stroke-width": 1.2 });
+valve("NV-401", "NV401", 1010, 170, { needle: true, ly: 202 });
+el("circle", { cx: 1060, cy: 170, r: 3.5, fill: "var(--ink)" });
+check(1115, 170, "CV-505", 154);
+valve("HV-601", "HV601", 1060, 215, { vertical: true, lx: 1074, ly: 219, anchor: "start" });
+const pumpG = el("g", { class: "click", tabindex: 0, role: "button", "aria-label": "Vacuum pump P-601 on or off" });
+el("circle", { cx: 1115, cy: 262, r: 22, fill: "#fff", stroke: "var(--ink)", "stroke-width": 1.6, class: "vb" }, pumpG);
+const rotor = el("path", { d: "M1103 250 L1131 262 L1103 274 Z", fill: "var(--ink)" }, pumpG);
+txt(1115, 302, "P-601", "tag mono", pumpG);
+txt(1115, 316, "vacuum pump", "small", pumpG);
+pumpG.addEventListener("click", () => { s.v.pump = !s.v.pump; refreshToggles(); });
+pumpG.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pumpG.dispatchEvent(new Event("click")); } });
+el("circle", { cx: 1170, cy: 170, r: 3.5, fill: "var(--ink)" });
+
+// bottles
+const bottles = {};
+function bottle(key, x0, tag, desc1, desc2, inDepth) {
+  const g = el("g", { "data-tip": tag });
+  el("rect", { x: x0, y: 200, width: 50, height: 130, rx: 5, fill: "#fbfdfd", stroke: "var(--ink)", "stroke-width": 1.5 }, g);
+  const liq = el("rect", { x: x0 + 1.5, y: 328, width: 47, height: 0, fill: "#cfe0fa" }, g);
+  const bub = el("g", {}, g);
+  txt(x0 + 25, 350, tag, "tag mono", g);
+  txt(x0 + 25, 364, desc1, "small", g);
+  if (desc2) txt(x0 + 25, 377, desc2, "small", g);
+  bottles[key] = { liq, bub, x0, inDepth };
+}
+bottle("sb", 1200, "SB-506", "suck-back", "(empty)", 226);
+bottle("a1", 1275, "AB-507", "dil. H₂SO₄", "NH₃ capture", 318);
+bottle("a2", 1350, "AB-508", "dil. H₂SO₄", "breakthrough", 318);
+bottle("bb", 1425, "BB-509", "oil", "bubbler", 318);
+tips["SB-506"] = () => `Empty suck-back bottle · liquid ${(s.liq.sb.acid + s.liq.sb.oil).toFixed(1)} mL`;
+tips["AB-507"] = () => `${s.liq.a1.acid.toFixed(0)} mL acid · NH₃ held ${(s.liq.a1.nh3 * 1e6).toFixed(2)} µmol · gas ${Math.max(0, s.flows.b1 || 0).toFixed(0)} sccm`;
+tips["AB-508"] = () => `${s.liq.a2.acid.toFixed(0)} mL acid · NH₃ held ${(s.liq.a2.nh3 * 1e6).toFixed(3)} µmol · gas ${Math.max(0, s.flows.b2 || 0).toFixed(0)} sccm`;
+tips["BB-509"] = () => `Oil seal · gas out ${Math.max(0, s.flows.vent || 0).toFixed(0)} sccm`;
+tips["FIC-101"] = () => `H₂ mass flow ${s.flows.FIC101.toFixed(1)} sccm · SP ${s.sp.FIC101} sccm${s.p.fFIC101 ? " · FAILED OPEN" : ""}${!(s.v.XV101 && !s.p.fPower && !s.v.esd) ? " · XV-101 shut" : ""}`;
+tips["FIC-102"] = () => `N₂ mass flow ${s.flows.FIC102.toFixed(1)} sccm · SP ${s.sp.FIC102} sccm`;
+tips["FI-104"] = () => `Ar rotameter ${s.flows.FI104.toFixed(0)} sccm · set ${s.sp.FI104} sccm`;
+
+// ESD and DAQ
+const esdG = el("g", { class: "click", tabindex: 0, role: "button", "aria-label": "Emergency shutdown HS-902" });
+el("circle", { cx: 1010, cy: 560, r: 18, fill: "#fff", stroke: "var(--hot)", "stroke-width": 2, class: "vb" }, esdG);
+const esdLamp = el("circle", { cx: 1010, cy: 560, r: 9, fill: "#f3c7bd" }, esdG);
+txt(1036, 556, "HS-902", "tag mono", esdG, "start");
+txt(1036, 570, "ESD button", "small", esdG, "start");
+esdG.addEventListener("click", () => { s.v.esd = !s.v.esd; refreshToggles(); });
+esdG.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); esdG.dispatchEvent(new Event("click")); } });
+el("rect", { x: 1250, y: 540, width: 170, height: 44, fill: "#fff", stroke: "var(--ink)", "stroke-width": 1.4, rx: 3 });
+txt(1335, 559, "DAQ", "tag mono");
+txt(1335, 574, "USB logger → PC", "small");
+txt(1335, 430, "Gas bubbles through each dip tube; acid climbs back", "small");
+txt(1335, 444, "up them if the train is pulled below atmosphere.", "small");
+
+/* ---------------- tooltips ---------------- */
+const tip = $("tip");
+svg.addEventListener("mousemove", (e) => {
+  const g = e.target.closest("[data-tip]");
+  if (!g || !tips[g.dataset.tip]) { tip.style.opacity = 0; return; }
+  const pr = svg.closest(".scene").getBoundingClientRect();
+  tip.innerHTML = `<b>${g.dataset.tip}</b><br><span class="v">${tips[g.dataset.tip]()}</span>`;
+  let x = e.clientX - pr.left + 14, y = e.clientY - pr.top + 14;
+  if (x > pr.width - 290) x -= 300;
+  tip.style.left = x + "px"; tip.style.top = y + "px"; tip.style.opacity = 1;
+});
+svg.addEventListener("mouseleave", () => { tip.style.opacity = 0; });
+
+/* ---------------- toggles panel ---------------- */
+const TOG = [["cylH2", "H₂ cyl"], ["cylN2", "N₂ cyl"], ["cylAr", "Ar cyl"], ["XV101", "XV-101"], ["HV111", "HV-111"], ["HV205", "HV-205"],
+  ["HV201", "HV-201"], ["HV202", "HV-202"], ["HV601", "HV-601"], ["pump", "P-601"], ["furnace", "Furnace"], ["esd", "ESD"]];
+TOG.forEach(([k, lab]) => {
+  const b = document.createElement("button"); b.type = "button"; b.textContent = lab; b.id = "t_" + k;
+  if (k === "esd") b.className = "danger";
+  b.addEventListener("click", () => { s.v[k] = !s.v[k]; refreshToggles(); });
+  $("toggles").appendChild(b);
+});
+function refreshToggles() {
+  TOG.forEach(([k]) => $("t_" + k).setAttribute("aria-pressed", s.v[k] ? "true" : "false"));
+  $("t_esd").textContent = s.v.esd ? "Reset ESD" : "ESD";
+}
+
+/* ---------------- sliders ---------------- */
+const fmtTOF = (v) => `10^${v} s⁻¹`;
+const SL = [
+  ["iFIC101", "oFIC101", (v) => { s.sp.FIC101 = v; return v + " sccm"; }],
+  ["iFIC102", "oFIC102", (v) => { s.sp.FIC102 = v; return v + " sccm"; }],
+  ["iFI104", "oFI104", (v) => { s.sp.FI104 = v; return v + " sccm"; }],
+  ["iNV", "oNV", (v) => { s.v.NV401 = v; return v + " %"; }],
+  ["iTsp", "oTsp", (v) => { s.sp.furnaceSP = v; return v + " °C"; }],
+  ["iTOF", "oTOF", (v) => { s.p.logTOF = v; return fmtTOF(v); }],
+  ["iEa", "oEa", (v) => { s.p.Ea = v; return v + " kJ/mol"; }],
+  ["iStore", "oStore", (v) => { s.p.storePct = v; return v.toFixed(1) + " %"; }],
+  ["iTau", "oTau", (v) => { s.p.nitrideTau = v; return v + " min"; }],
+  ["iYb", "oYb", (v) => v.toFixed(1) + " at%"],
+  ["iMass", "oMass", (v) => v + " g"]
+];
+SL.forEach(([i, o, f]) => { $(i).addEventListener("input", () => { $(o).textContent = f(+$(i).value); }); });
+function syncSliders() {   // engine -> sliders (after reset or while the auto-run operates the rig)
+  const set = (id, v) => { if (document.activeElement !== $(id)) $(id).value = v; };
+  set("iFIC101", s.sp.FIC101); set("iFIC102", s.sp.FIC102); set("iFI104", s.sp.FI104); set("iNV", s.v.NV401); set("iTsp", s.sp.furnaceSP);
+  $("oFIC101").textContent = s.sp.FIC101 + " sccm"; $("oFIC102").textContent = s.sp.FIC102 + " sccm"; $("oFI104").textContent = s.sp.FI104 + " sccm";
+  $("oNV").textContent = s.v.NV401 + " %"; $("oTsp").textContent = s.sp.furnaceSP + " °C";
+}
+SL.slice(5).forEach(([i, o, f]) => { $(o).textContent = f(+$(i).value); });
+const MODE_NOTE = {
+  nitride: "YbN forms from N₂ and is too stable for H₂ to reduce: PT-301 falls as N₂ is taken up, but the acid stays blank.",
+  tof: "Melt makes NH₃ catalytically at the TOF you set (per Yb atom, at 200 °C), with Arrhenius scaling and the NH₃ equilibrium limit. Sparging gives full gas contact; a static hold only the melt surface.",
+  release: "Hypothesis from the reported observation: reactive N–H species build up under N₂ + H₂ and leave as NH₃ when the pressure is reduced (release step / pump-down)."
+};
+function modeUI() {
+  const m = $("sMode").value; s.p.mode = m; $("modeNote").textContent = MODE_NOTE[m];
+  document.querySelectorAll("[data-mode]").forEach((l) => { l.hidden = l.dataset.mode !== m; });
+}
+$("sMode").addEventListener("change", modeUI);
+["fLeak", "fCV505", "fFIC101", "fPower"].forEach((k) => $(k).addEventListener("change", () => { s.p[k] = $(k).checked; }));
+$("iYb").addEventListener("change", () => say("Restart the run to load the new melt.", true));
+$("iMass").addEventListener("change", () => say("Restart the run to load the new melt.", true));
+
+/* ---------------- buttons ---------------- */
+function say(t, warn) { $("msg").textContent = t; $("msg").style.color = warn ? "var(--hot)" : "var(--ok)"; setTimeout(() => { if ($("msg").textContent === t) $("msg").textContent = ""; }, 4000); }
+function restart() { s = S.create(params()); demo = null; $("bDemoStop").disabled = true; $("res").textContent = "Run the hold and the sweep first, then analyse. Detection limit 0.02 mg N/L."; refreshToggles(); syncSliders(); drawCharts(); updatePanel(); }
+$("bPlay").addEventListener("click", () => { running = !running; $("bPlay").textContent = running ? "Pause" : "Resume"; });
+$("bReset").addEventListener("click", restart);
+$("sSpeed").addEventListener("change", () => { speed = +$("sSpeed").value; });
+$("bDemo").addEventListener("click", () => {
+  restart(); demo = S.demoScript(+$("sHold").value); demoIdx = 0; $("bDemoStop").disabled = false;
+  if (speed < 60) { speed = 60; $("sSpeed").value = "60"; }
+  running = true; $("bPlay").textContent = "Pause";
+});
+$("bDemoStop").addEventListener("click", () => { demo = null; $("bDemoStop").disabled = true; $("demo").innerHTML = "Auto-run stopped. You have the controls."; });
+$("bAnalyse").addEventListener("click", () => { S.analyse(s); showAnalysis(); });
+$("bFresh").addEventListener("click", () => { S.freshTraps(s); $("res").textContent = "Fresh acid loaded."; });
+$("bOpen").addEventListener("click", () => { S.openReactor(s); });
+function copy(text, label) {
+  const done = () => say(label + " copied.");
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, () => fallback());
+  else fallback();
+  function fallback() { const b = $("csvBox"); b.style.display = "block"; b.value = text; b.select(); say("Select-all and copy from the box below."); }
+}
+const mmss = (t) => { const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), sec = Math.floor(t % 60); return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`; };
+$("bCopy").addEventListener("click", () => {
+  const head = "time_s,PT201_kPa,PT301_kPa,TE201_C,TIC201_C,FIC101_sccm,FIC102_sccm,FI104_sccm,xH2,xN2,xAr,xO2,NH3_ppm,AB507_umol,AB508_umol";
+  copy([head].concat(s.logs.map((r) => [r.t.toFixed(0), r.PT201.toFixed(2), r.PT301.toFixed(2), r.TE201.toFixed(1), r.TIC201, r.FIC101.toFixed(1), r.FIC102.toFixed(1), r.FI104,
+    r.xH2.toFixed(4), r.xN2.toFixed(4), r.xAr.toFixed(4), r.xO2.toExponential(2), r.nh3ppm.toFixed(1), r.cap1.toFixed(4), r.cap2.toFixed(4)].join(","))).join("\n"), "Logger CSV");
+});
+$("bCopyMan").addEventListener("click", () => {
+  copy(["time,PT201_kPa,PT301_kPa,TE201_C,TIC_C,FIC101,FIC102,FI104"].concat(s.manual.map((r) => [mmss(r.t), r.PT201.toFixed(1), r.PT301.toFixed(1), r.TE201.toFixed(1), r.TIC, r.FIC101.toFixed(0), r.FIC102.toFixed(0), r.FI104].join(","))).join("\n"), "Manual log");
+});
+
+/* ---------------- panels ---------------- */
+function meltState() { return s.fL >= 1 ? "liquid" : s.fL > 0 ? `mushy, ${(s.fL * 100).toFixed(0)} % liquid` : "solid"; }
+const fmt = (v, d) => (Math.abs(v) >= 1e4 ? v.toExponential(1) : v.toFixed(d));
+function showAnalysis() {
+  const a = s.analysis; if (!a) return;
+  const one = (r, tag) => `<tr><td>${tag}</td><td>${r.V.toFixed(0)} mL</td><td class="big">${r.below ? "&lt; LOD" : r.meas.toFixed(3)}</td><td>${r.below ? "—" : r.umol.toFixed(3)}</td></tr>`;
+  let h = `<table><thead><tr><th>Trap</th><th>Acid</th><th>NH₄⁺-N, mg/L</th><th>NH₃, µmol</th></tr></thead><tbody>${one(a.a1, "AB-507")}${one(a.a2, "AB-508")}</tbody></table>`;
+  if (a.holdMin > 0) {
+    h += `<p>Hold ${a.holdMin.toFixed(0)} min over ${(a.nYb * 1e3).toFixed(2)} mmol Yb. Apparent TOF from the traps: <b class="big">${a.tofApparent > a.tofLOD ? a.tofApparent.toExponential(2) + " s⁻¹" : "not detected"}</b>. Smallest TOF this run could detect: ${a.tofLOD.toExponential(1)} s⁻¹.</p>`;
+  } else h += "<p>No hold recorded yet, so no rate can be worked out.</p>";
+  if (s.liq.sb.acid > 1) h += `<p style="color:var(--hot)">Acid was sucked back into SB-506: this sample is not valid.</p>`;
+  if (a.a2.umol > 0.1 * Math.max(a.a1.umol, 1e-9) && !a.a2.below) h += `<p style="color:#9a5c06">Over 10 % in AB-508: NH₃ broke through the first trap. Release or sweep more slowly.</p>`;
+  $("res").innerHTML = h;
+}
+
+const SOP = [
+  ["leak", "Leak-up test", "Evacuate R-201 below 10 kPa, isolate it (NV-401 and inlets shut) and watch PT-301 for 5 min: rise under 0.1 kPa/min."],
+  ["purge", "Purge with Ar", "Three cycles of evacuate and refill with Ar, feed lines included (HV-111, HV-202), until O₂ is below 10 ppm."],
+  ["melt", "Melt under Ar", "Heat with a little Ar flowing out through the traps (NV-401 cracked) so the warming gas has somewhere to go. Wait for TE-201 to show the melt fully liquid."],
+  ["fill", "Fill N₂ + H₂", "Evacuate the hot reactor, then feed N₂ 25 + H₂ 75 sccm through sparger S1 (HV-201) until PT-301 is just above atmospheric."],
+  ["release", "Hold, then release", "Hold isolated for the set time. Release through NV-401 only while PT-301 is above atmospheric, then pump down through the traps."],
+  ["sweep", "Ar sweep", "Close NV-401, close HV-601, then stop P-601. Refill with Ar above atmospheric and sweep it through the traps."],
+  ["analyse", "Analyse the traps", "Indophenol on AB-507 and AB-508. Fresh acid for the next run."]
+];
+function updateSOP() {
+  let first = true;
+  $("sop").innerHTML = SOP.map(([k, t, d]) => {
+    const done = !!s.sop.done[k];
+    let cls = done ? "done" : (first ? "now" : ""); if (!done) first = false;
+    let extra = "";
+    if (k === "leak") extra = s.sop.leak.state === "run" ? ` · running ${((s.t - s.sop.leak.t0) / 60).toFixed(1)} min` : s.sop.leak.state === "fail" ? " · FAILED" : "";
+    if (k === "purge") extra = ` · ${s.sop.cycles} cycle${s.sop.cycles === 1 ? "" : "s"}`;
+    if (k === "release" && s.sop.done.fill && !s.sop.done.release) extra = ` · holding ${((s.t - s.sop.fillT) / 60).toFixed(0)} min`;
+    return `<li class="${cls}"><div><b>${t}</b>${extra}<span>${d}</span></div></li>`;
+  }).join("");
+}
+
+let lastEv = -1;
+function updatePanel() {
+  const r = S.readings(s);
+  const Prx = r.PT301, TmC = r.TE201;
+  $("lcd").innerHTML = [
+    ["PT-201", "header", r.PT201.toFixed(1) + " kPa"],
+    ["PT-301", "reactor", Prx.toFixed(1) + " kPa"],
+    ["TE-201", "melt", TmC.toFixed(1) + " °C"],
+    ["TIC-201", `SP ${s.sp.furnaceSP}`, r.TIC201 + " °C"],
+    ["FIC-101", "H₂", r.FIC101.toFixed(1) + " sccm"],
+    ["FIC-102", "N₂", r.FIC102.toFixed(1) + " sccm"],
+    ["FI-104", "Ar", r.FI104 + " sccm"]
+  ].map(([a, b, c]) => `<div class="row"><span>${a}</span><span>${b}</span><span>${c}</span></div>`).join("") +
+    `<div class="foot"><span>t ${mmss(s.t)}</span><span>${s.logs.length} rows</span></div>`;
+  $("pClock").textContent = mmss(s.t);
+  $("pState").textContent = running ? (demo ? "Auto-run" : "Running") : "Paused";
+  $("pState").className = "pill " + (running ? "run" : "");
+  $("pSpeed").textContent = "×" + speed;
+  const al = Object.values(s.alarms);
+  $("pAlarm").hidden = al.length === 0; $("pAlarm").textContent = al.length + " alarm" + (al.length > 1 ? "s" : "");
+  $("pAlarm").className = "pill " + (al.some((a) => a.level === "alarm") ? "bad" : "warn");
+  $("alarmCard").hidden = al.length === 0;
+  $("alarms").innerHTML = al.map((a) => `<div class="${a.level}">${a.text}</div>`).join("");
+
+  $("kP").innerHTML = Prx.toFixed(1) + "<small>kPa</small>";
+  $("kPN").textContent = Prx < 20 ? "under vacuum" : Prx > 101.3 ? `${(Prx - 101.3).toFixed(1)} kPa above atm` : `${(101.3 - Prx).toFixed(1)} kPa below atm`;
+  $("kT").innerHTML = TmC.toFixed(0) + "<small>°C</small>";
+  $("kTN").textContent = meltState();
+  $("kO2").innerHTML = (r.o2ppm >= 1e4 ? (r.o2ppm / 1e4).toFixed(1) + "<small>%</small>" : r.o2ppm.toFixed(r.o2ppm < 10 ? 1 : 0) + "<small>ppm</small>");
+  $("kO2N").textContent = r.o2ppm < 10 ? "purged" : "purge before heating";
+  $("kMade").innerHTML = fmt(r.made, 2) + "<small>µmol</small>";
+  $("kMadeN").textContent = s.p.mode === "nitride" ? `N₂ taken up ${fmt(r.n2up, 1)} µmol` : `in gas now ${r.nh3ppm.toFixed(0)} ppm`;
+  $("kCap").innerHTML = fmt(r.cap1 + r.cap2, 2) + "<small>µmol</small>";
+  $("kCapN").textContent = `AB-507 ${fmt(r.cap1, 2)} · AB-508 ${fmt(r.cap2, 3)}`;
+  $("kYb").innerHTML = (s.melt.nYb > 0 ? r.ybMetal.toFixed(1) : "—") + "<small>%</small>";
+  $("kYbN").textContent = s.melt.nYb > 0 ? `oxide ${(s.yb.oxide / s.melt.nYb * 100).toFixed(1)} % · nitride ${(s.yb.nitride / s.melt.nYb * 100).toFixed(1)} %` : "Bi–Sn blank";
+
+  updateSOP();
+  const evTop = s.events[s.events.length - 1];
+  if (evTop !== lastEv) {
+    lastEv = evTop;
+    $("events").innerHTML = s.events.slice().reverse().map((e) => `<div class="${e.level}"><b>${mmss(e.t).slice(0, -3)}</b><span>${e.text}</span></div>`).join("");
+  }
+  $("manual").innerHTML = s.manual.slice().reverse().map((m) => `<tr><td>${mmss(m.t).slice(0, -3)}</td><td>${m.PT201.toFixed(1)}</td><td>${m.PT301.toFixed(1)}</td><td>${m.TE201.toFixed(1)}</td><td>${m.TIC}</td><td>${m.FIC101.toFixed(0)}</td><td>${m.FIC102.toFixed(0)}</td><td>${m.FI104}</td></tr>`).join("");
+  if (demo) {
+    const cur = demo[demoIdx];
+    $("demo").innerHTML = cur ? `Step ${demoIdx + 1} of ${demo.length}, waiting for: <b>${cur.note}</b>` : "Auto-run finished. Results are in the analysis panel.";
+  }
+  if (s.analysis && s.analysis.t !== s._shownA) { s._shownA = s.analysis.t; showAnalysis(); }
+  syncSliders();
+  refreshToggles();
+}
+
+/* ---------------- live scene ---------------- */
+function updateScene(rd) {
+  const N = s.N;
+  const supply = { supH2: s.v.cylH2 ? [1, 0, 0, 0, 0] : null, supN2: s.v.cylN2 ? [0, 1, 0, 0, 0] : null, supAr: s.v.cylAr ? [0, 0, 1, 0, 0] : null };
+  lines.forEach((L) => {
+    let col = "#b9c3c5", vac = false, op = 1;
+    if (L.nodeKey in supply) { if (supply[L.nodeKey]) col = gasColour(supply[L.nodeKey]); }
+    else if (L.nodeKey === "vent") { col = gasColour([0, 0.78, 0.01, 0, 0.21]); op = 0.5; }
+    else { col = gasColour(comp(L.nodeKey)); vac = S.press(N[L.nodeKey]) < 20000; }
+    L.base.setAttribute("stroke", col);
+    L.base.setAttribute("stroke-opacity", vac ? 0.4 : op);
+    L.base.setAttribute("stroke-dasharray", vac ? "6 5" : "");
+    const f = L.flowFn ? L.flowFn() : 0;
+    if (Math.abs(f) > 0.3) {
+      L.dash.setAttribute("visibility", "visible");
+      if (!reduced) L.off -= Math.sign(f) * Math.min(60, 8 + 10 * Math.log10(1 + Math.abs(f))) * rd * (running ? 1 : 0);
+      L.dash.setAttribute("stroke-dashoffset", L.off);
+    } else L.dash.setAttribute("visibility", "hidden");
+  });
+  // flow controller readouts
+  fic101.v.textContent = (s.flows.FIC101 || 0).toFixed(1) + " / " + (s.p.fFIC101 ? "FAIL" : s.sp.FIC101);
+  fic102.v.textContent = (s.flows.FIC102 || 0).toFixed(1) + " / " + s.sp.FIC102;
+  fi104.v.textContent = (s.flows.FI104 || 0).toFixed(0) + " sccm";
+  // cylinders
+  ["cylH2", "cylN2", "cylAr"].forEach((k) => { cyl[k].ind.setAttribute("fill", s.v[k] ? "var(--ok)" : "#fff"); cyl[k].st.textContent = s.v[k] ? "open" : "shut"; });
+  // valves
+  const power = !s.p.fPower && !s.v.esd;
+  for (const id in valves) {
+    const V = valves[id];
+    let open;
+    if (V.key === "NV401") open = s.v.NV401 > 0;
+    else if (V.key === "XV101") open = s.v.XV101 && power;
+    else open = !!s.v[V.key];
+    V.b.setAttribute("fill", open ? "#e3f3ea" : "var(--ink)");
+    V.b.setAttribute("stroke", open ? "var(--ok)" : "var(--ink)");
+  }
+  // furnace and melt
+  glow.setAttribute("opacity", (0.05 + 0.3 * s.th.Pw / 1400) * (s.v.furnace ? 1 : 0) + Math.max(0, (s.th.Tf - 323) / 2500));
+  furnBody.setAttribute("stroke", s.v.furnace && power ? "var(--hot)" : "#b8692e");
+  const TmC = s.th.Tm - 273.15;
+  const hot = Math.max(0, Math.min(1, (TmC - 100) / 400));
+  melt.setAttribute("fill", s.fL >= 1 ? `rgb(${Math.round(150 + 80 * hot)},${Math.round(160 - 30 * hot)},${Math.round(170 - 80 * hot)})` : s.fL > 0 ? "#9fa6aa" : "#8a8f93");
+  meltSurf.setAttribute("stroke", s.fL > 0 ? "#e6ecee" : "#a7aeb2");
+  headspace.setAttribute("fill", gasColour(comp("rx")));
+  headspace.setAttribute("opacity", Math.min(0.35, S.press(N.rx) / 101325 * 0.3));
+  plugMark.S1.textContent = s.spg.S1.plugged ? "S1 plugged" : "";
+  plugMark.S2.textContent = s.spg.S2.plugged ? "S2 plugged" : "";
+  rotor.setAttribute("transform", s.v.pump && power ? `rotate(${(performance.now() / 4) % 360} 1115 262)` : "");
+  psvLamp.setAttribute("fill", s.flows.psv > 1 ? "var(--hot)" : "#e3e9e8");
+  esdLamp.setAttribute("fill", s.v.esd ? "var(--hot)" : "#f3c7bd");
+  // bubbles in melt
+  spawnBubbles(rd);
+  // bottles
+  const B = s.liq;
+  const level = (k, b) => {
+    const vol = B[k].acid + B[k].oil, h = Math.min(127, vol * 0.52);
+    b.liq.setAttribute("y", 328 - h); b.liq.setAttribute("height", h);
+    const nh3 = B[k].nh3 * 1e6;
+    b.liq.setAttribute("fill", B[k].oil > B[k].acid ? "#f6e3b4" : nh3 > 1 ? "#d9c8ef" : "#cfe0fa");
+  };
+  level("sb", bottles.sb); level("a1", bottles.a1); level("a2", bottles.a2); level("bb", bottles.bb);
+}
+const bub = [];
+function spawnBubbles(rd) {
+  if (!running || reduced) { while (bub.length) bub.pop().e.remove(); return; }
+  const add = (x, y0, yTop, g) => { const e = el("circle", { cx: x + (Math.random() - 0.5) * 6, cy: y0, r: 2 + Math.random() * 2, fill: "#fff", "fill-opacity": 0.85, stroke: "#5b6b71", "stroke-width": 0.5 }, g); bub.push({ e, y: y0, top: yTop, vx: (Math.random() - 0.5) * 8 }); };
+  const rate = (f) => Math.min(25, Math.abs(f) / 4);
+  if (s.flows.S1 > 0.5 && Math.random() < rate(s.flows.S1) * rd) add(765, 590, 566, bubblesG);
+  if (s.flows.S2 > 0.5 && Math.random() < rate(s.flows.S2) * rd) add(835, 590, 566, bubblesG);
+  [["a1", "b1"], ["a2", "b2"], ["bb", "b3"]].forEach(([k, fk]) => {
+    const b = bottles[k], f = s.flows[fk];
+    const vol = s.liq[k].acid + s.liq[k].oil;
+    if (f > 0.5 && vol > 20 && Math.random() < rate(f) * rd * 1.5) add(b.x0 + 15, 318, 328 - Math.min(127, vol * 0.52), b.bub);
+  });
+  for (let i = bub.length - 1; i >= 0; i--) {
+    const b = bub[i]; b.y -= 40 * rd;
+    b.e.setAttribute("cy", b.y); b.e.setAttribute("cx", +b.e.getAttribute("cx") + b.vx * rd);
+    if (b.y < b.top) { b.e.remove(); bub.splice(i, 1); }
+  }
+}
+
+/* ---------------- charts (same renderer as the ZLDD lab) ---------------- */
+function setupCanvas(c) {
+  const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const ctx = c.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+  return { ctx, w, h };
+}
+function niceStep(range, n) { const raw = range / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / mag; return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * mag; }
+function chart(id, lgId, series, opt) {
+  const { ctx, w, h } = setupCanvas($(id));
+  $(lgId).innerHTML = series.map((sr) => `<span style="color:${sr.color}"><i class="${sr.dash ? "dash" : ""}" style="background:${sr.color}"></i><span style="color:var(--muted)">${sr.name}</span></span>`).join("");
+  const L = 48, R = 18, T = 8, B = 24, pw = w - L - R, ph = h - T - B;
+  const tmax = Math.max(10, s.t / 60);
+  const xst = niceStep(tmax, 6), x1 = Math.ceil(tmax / xst) * xst;
+  let lo = Infinity, hi = -Infinity;
+  series.forEach((sr) => sr.data.forEach(([, y]) => { if (y < lo) lo = y; if (y > hi) hi = y; }));
+  if (!isFinite(lo)) { lo = 0; hi = 1; }
+  if (opt.min !== undefined) lo = Math.min(lo, opt.min);
+  if (opt.max !== undefined) hi = Math.max(hi, opt.max);
+  const st = niceStep(Math.max(1e-6, hi - lo), 4);
+  lo = Math.floor(lo / st) * st; hi = Math.ceil(hi / st) * st; if (hi === lo) hi = lo + st;
+  const px = (x) => L + pw * x / x1, py = (y) => T + ph * (1 - (y - lo) / (hi - lo));
+  ctx.font = "11px IBM Plex Mono, monospace"; ctx.fillStyle = "#5b6b71"; ctx.strokeStyle = "#e3e9e8"; ctx.lineWidth = 1;
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  const dec = st < 0.01 ? 3 : st < 0.1 ? 2 : st < 1 ? 1 : 0;
+  for (let y = lo; y <= hi + st / 2; y += st) { ctx.beginPath(); ctx.moveTo(L, py(y)); ctx.lineTo(L + pw, py(y)); ctx.stroke(); ctx.fillText(y.toFixed(dec), L - 6, py(y)); }
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for (let x = 0; x <= x1 + 1e-9; x += xst) ctx.fillText(x.toFixed(0) + (x === 0 ? "" : ""), px(x), T + ph + 6);
+  ctx.textAlign = "right"; ctx.fillText("min", L + pw, T + ph + 6 - 14);
+  ctx.save(); ctx.translate(11, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(opt.unit, 0, 0); ctx.restore();
+  series.forEach((sr) => {
+    if (!sr.data.length) return;
+    ctx.beginPath(); sr.data.forEach(([x, y], i) => (i ? ctx.lineTo(px(x), py(y)) : ctx.moveTo(px(x), py(y))));
+    ctx.strokeStyle = sr.color; ctx.lineWidth = sr.width || 1.8; ctx.setLineDash(sr.dash ? [5, 4] : []); ctx.stroke(); ctx.setLineDash([]);
+    const [lx, ly] = sr.data[sr.data.length - 1];
+    ctx.fillStyle = sr.color; ctx.beginPath(); ctx.arc(px(lx), py(ly), 3, 0, Math.PI * 2); ctx.fill();
+  });
+}
+function thin(fn) { const lg = s.logs, st = Math.max(1, Math.floor(lg.length / 500)), out = []; for (let i = 0; i < lg.length; i += st) out.push([lg[i].t / 60, fn(lg[i])]); if (lg.length) out.push([lg[lg.length - 1].t / 60, fn(lg[lg.length - 1])]); return out; }
+function drawCharts() {
+  chart("c1", "lg1", [
+    { name: "PT-301 reactor", color: "#0d6f8f", data: thin((r) => r.PT301) },
+    { name: "PT-201 header", color: "#9a5c06", data: thin((r) => r.PT201), dash: true }
+  ], { unit: "kPa abs", min: 0, max: 120 });
+  chart("c2", "lg2", [
+    { name: "TE-201 melt", color: "#c4472f", data: thin((r) => r.TE201) },
+    { name: "TIC-201 furnace", color: "#d98a1c", data: thin((r) => r.TIC201), dash: true },
+    { name: "solidus 125 °C", color: "#9aa5a8", data: s.logs.length ? [[0, s.p.solidus], [s.t / 60, s.p.solidus]] : [], width: 1 }
+  ], { unit: "°C", min: 0 });
+  chart("c3", "lg3", [
+    { name: "H₂", color: "#5b4fc4", data: thin((r) => r.xH2 * 100) },
+    { name: "N₂", color: "#2f8a57", data: thin((r) => r.xN2 * 100) },
+    { name: "Ar", color: "#7d8a8f", data: thin((r) => r.xAr * 100) },
+    { name: "O₂", color: "#d98a1c", data: thin((r) => r.xO2 * 100) }
+  ], { unit: "mol %", min: 0, max: 100 });
+  chart("c4", "lg4", [
+    { name: "formed in R-201 (model)", color: "#b0418f", data: thin((r) => r.made), dash: true },
+    { name: "caught in AB-507", color: "#0d6f8f", data: thin((r) => r.cap1) },
+    { name: "AB-508 (breakthrough)", color: "#d98a1c", data: thin((r) => r.cap2) }
+  ], { unit: "µmol NH₃", min: 0, max: 0.1 });
+}
+
+/* ---------------- loop ---------------- */
+modeUI(); refreshToggles(); syncSliders(); drawCharts(); updatePanel(); updateScene(0);
+let last = performance.now(), panelT = 0, chartT = 0;
+function frame(now) {
+  const rd = Math.min(0.1, (now - last) / 1000); last = now;
+  if (running) {
+    let left = rd * speed;
+    while (left > 1e-9) {
+      if (demo && demoIdx < demo.length && demo[demoIdx].when(s)) { demo[demoIdx].act(s); demoIdx++; continue; }
+      const chunk = Math.min(left, 1);
+      S.advance(s, chunk); left -= chunk;
+    }
+    if (demo && demoIdx >= demo.length) { $("bDemoStop").disabled = true; }
+  }
+  updateScene(rd);
+  panelT += rd; chartT += rd;
+  if (panelT > 0.25) { panelT = 0; updatePanel(); }
+  if (chartT > 0.8) { chartT = 0; drawCharts(); }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+window.addEventListener("resize", drawCharts);
+})();
+</script>
+</body>
+</html>
