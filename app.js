@@ -485,7 +485,7 @@ const RES0 = "Run the hold and the sweep first, then analyse. Detection limit 0.
 function restart() { s = S.create(params()); closePop(); $("bStop").disabled = true; $("res").textContent = RES0; refreshToggles(); syncSliders(); meltNote(); drawCharts(); updatePanel(); }
 $("bPlay").addEventListener("click", () => { running = !running; $("bPlay").textContent = running ? "Pause" : "Resume"; });
 $("bReset").addEventListener("click", restart);
-$("sSpeed").addEventListener("change", () => { speed = +$("sSpeed").value; });
+$("sSpeed").addEventListener("change", () => { speed = +$("sSpeed").value; if (pacing()) $("pPace").checked = false; });
 
 /* ---------------- run program ---------------- */
 const PH_INFO = {
@@ -521,7 +521,7 @@ $("bStart").addEventListener("click", () => {
   $("bStop").disabled = false; running = true; $("bPlay").textContent = "Pause";
   if (speed < 60) { speed = 60; $("sSpeed").value = "60"; }
 });
-$("bStop").addEventListener("click", () => { S.stopProgram(s); $("bStop").disabled = true; });
+$("bStop").addEventListener("click", () => { S.stopProgram(s); $("bStop").disabled = true; running = false; $("bPlay").textContent = "Resume"; speed = +$("sSpeed").value; });
 function updateProgram() {
   const st = S.programStatus(s);
   if (!st) { bTitle.textContent = "No run"; bSub.textContent = "Set the phase times and press Start run"; bLeft.textContent = ""; bNext.textContent = ""; bChip.setAttribute("fill", "#c4cdcf"); return; }
@@ -537,7 +537,7 @@ function updateProgram() {
   const nxt = st.plan[st.idx + 1];
   bChip.setAttribute("fill", PH_COL[ph.key]);
   bTitle.textContent = `${k} · ${ph.name}`;
-  bSub.textContent = `Cycle ${st.cycle} of ${st.cycles}`;
+  bSub.textContent = `Cycle ${st.cycle} of ${st.cycles} · ${mm(ph.min * 60 - st.left)} of ${mm(ph.min * 60)}`;
   bLeft.textContent = mm(st.left) + " left";
   bNext.textContent = nxt ? `next: ${nxt.name}` : "then analysis";
   $("demo").innerHTML = `<b>Cycle ${st.cycle}/${st.cycles} · ${k} ${ph.name}</b> · ${mm(st.left)} left · run ${mm(st.elapsed)} of ${mm(st.total)}<br>${PH_INFO[ph.key]}`;
@@ -628,9 +628,9 @@ function updatePanel() {
     `<div class="foot"><span>t ${hms(s.t)}</span><span>${s.logs.length} rows</span></div>`;
   $("pClock").textContent = hms(s.t);
   const pst = S.programStatus(s);
-  $("pState").textContent = !running ? "Paused" : pst && !pst.done ? `${pst.phase.name} · ${mm(pst.left)}` : "Running";
+  $("pState").textContent = pst && pst.done && !running ? (pst.stopped ? "Run stopped" : "Run complete") : !running ? "Paused" : pst && !pst.done ? `${pst.phase.name} · ${mm(pst.left)}` : "Running";
   $("pState").className = "pill " + (running ? "run" : "");
-  $("pSpeed").textContent = "×" + speed;
+  $("pSpeed").textContent = "×" + Math.round(speed) + (pacing() ? " auto" : "");
   const al = Object.values(s.alarms);
   $("pAlarm").hidden = al.length === 0; $("pAlarm").textContent = al.length + " alarm" + (al.length > 1 ? "s" : "");
   $("pAlarm").className = "pill " + (al.some((a) => a.level === "alarm") ? "bad" : "warn");
@@ -807,16 +807,30 @@ function drawCharts() {
 
 /* ---------------- loop ---------------- */
 modeUI(); refreshToggles(); syncSliders(); meltNote(); showTotal(); drawCharts(); updatePanel(); updateScene(0);
-let last = performance.now(), panelT = 0, chartT = 0;
+let last = performance.now(), panelT = 0, chartT = 0, wasDone = true;
+function pacing() { const st = S.programStatus(s); return !!(st && !st.done && $("pPace").checked); }
 function frame(now) {
   const rd = Math.min(0.1, (now - last) / 1000); last = now;
   if (running) {
+    const st = S.programStatus(s);
+    if (st && !st.done && $("pPace").checked) {   // each phase takes the same real time on screen
+      const secs = Math.max(5, Math.min(120, +$("pPaceS").value || 20));
+      speed = Math.max(1, st.phase.min * 60 / secs);
+    }
     let left = rd * speed;
     while (left > 1e-9) {
       const chunk = Math.min(left, 1);
       S.advance(s, chunk); left -= chunk;
+      if (s.prog && s.prog.done && !wasDone) break;
+    }
+    // run finished: stop the clock
+    if (s.prog && s.prog.done && !wasDone) {
+      running = false; $("bPlay").textContent = "Resume";
+      speed = +$("sSpeed").value;
+      updatePanel(); drawCharts();
     }
   }
+  wasDone = !s.prog || s.prog.done;
   updateScene(rd);
   panelT += rd; chartT += rd;
   if (panelT > 0.25) { panelT = 0; updatePanel(); }

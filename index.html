@@ -259,6 +259,9 @@ th { font-size: 12px; color: var(--muted); font-weight: 500; }
           <label class="chk"><input type="checkbox" id="pSweep" checked> <span>Final Ar purge after the last cycle, to sweep everything into the trap</span></label>
         </div>
         <div class="total" id="pTotal"></div>
+        <div class="ctl prog">
+          <label class="chk"><input type="checkbox" id="pPace" checked> <span>Play each phase on screen for <span class="num"><input type="number" id="pPaceS" min="5" max="120" step="1" value="20"> s</span>, so every flow can be followed (the speed adjusts by itself)</span></label>
+        </div>
         <div class="btns">
           <button class="primary" id="bStart" type="button">Start run</button>
           <button id="bStop" type="button" disabled>Stop</button>
