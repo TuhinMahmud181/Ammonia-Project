@@ -313,12 +313,13 @@ const bRect = el("rect", { x: 518, y: 8, width: 420, height: 54, rx: 9, fill: "#
 const bChip = el("rect", { x: 526, y: 16, width: 8, height: 38, rx: 3, fill: "#c4cdcf" }, banner);
 const bTitle = txt(544, 33, "No run", "tag", banner, "start", "font-size:16px;font-weight:700");
 const bSub = txt(544, 51, "Set the phase times and press Start run", "small", banner, "start", "font-size:11.5px");
-const bLeft = txt(838, 33, "", "mono", banner, "end", "font-size:16px;font-weight:700");
-const bNext = txt(838, 51, "", "small", banner, "end", "font-size:11px");
+const bLeft = txt(822, 33, "", "mono", banner, "end", "font-size:16px;font-weight:700");
+const bNext = txt(822, 51, "", "small", banner, "end", "font-size:11px");
 const bBtn = el("g", { class: "click", tabindex: 0, role: "button", "aria-label": "Start or stop the run" }, banner);
-const bBtnR = el("rect", { x: 852, y: 18, width: 78, height: 34, rx: 17, fill: "#2f8a57", class: "vb" }, bBtn);
-const bBtnT = txt(891, 40, "▶ Start", "mono", bBtn, "middle", "font-size:13px;font-weight:700;fill:#fff");
-const runToggle = () => { const st = S.programStatus(s); if (st && !st.done) $("bStop").click(); else $("bStart").click(); };
+const bBtnR = el("rect", { x: 832, y: 18, width: 98, height: 34, rx: 17, fill: "#2f8a57", class: "vb" }, bBtn);
+const bBtnT = txt(881, 40, "▶ Start", "mono", bBtn, "middle", "font-size:13px;font-weight:700;fill:#fff");
+// no run (or finished): start a new one; during a run: pause / continue from the same point
+const runToggle = () => { const st = S.programStatus(s); if (st && !st.done) setRunning(!running); else $("bStart").click(); };
 bBtn.addEventListener("click", (e) => { e.stopPropagation(); runToggle(); });
 bBtn.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); runToggle(); } });
 
@@ -489,7 +490,16 @@ $("sMode").addEventListener("change", modeUI);
 function say(t, warn) { $("msg").textContent = t; $("msg").style.color = warn ? "var(--hot)" : "var(--ok)"; setTimeout(() => { if ($("msg").textContent === t) $("msg").textContent = ""; }, 4000); }
 const RES0 = "Run the hold and the sweep first, then analyse. Detection limit 0.02 mg N/L.";
 function restart() { s = S.create(params()); closePop(); $("bStop").disabled = true; $("res").textContent = RES0; refreshToggles(); syncSliders(); meltNote(); drawCharts(); updatePanel(); }
-$("bPlay").addEventListener("click", () => { running = !running; $("bPlay").textContent = running ? "Pause" : "Resume"; });
+let pausedAt = null;
+function setRunning(on) {
+  if (on === running) return;
+  running = on;
+  if (!on) pausedAt = performance.now();
+  else if (pausedAt !== null) { if (typeof pace !== "undefined") pace.t0 += performance.now() - pausedAt; pausedAt = null; }   // the on-screen phase clock pauses too
+  $("bPlay").textContent = running ? "Pause" : "Resume";
+  updatePanel();
+}
+$("bPlay").addEventListener("click", () => setRunning(!running));
 $("bReset").addEventListener("click", restart);
 $("sSpeed").addEventListener("change", () => { speed = +$("sSpeed").value; if (pacing()) $("pPace").checked = false; });
 
@@ -525,14 +535,15 @@ $("bStart").addEventListener("click", () => {
   pace.idx = -1; pace.tSim = null;
   restart();
   S.startProgram(s, c);
-  $("bStop").disabled = false; running = true; $("bPlay").textContent = "Pause";
+  $("bStop").disabled = false; pausedAt = null; running = true; $("bPlay").textContent = "Pause";
   if (speed < 60) { speed = 60; $("sSpeed").value = "60"; }
 });
 $("bStop").addEventListener("click", () => { S.stopProgram(s); $("bStop").disabled = true; running = false; $("bPlay").textContent = "Resume"; speed = +$("sSpeed").value; });
 $("hRun").addEventListener("click", () => runToggle());
 function runButtons(active) {
-  $("hRun").textContent = active ? "■ Stop run" : "▶ Start run"; $("hRun").classList.toggle("stop", active);
-  bBtnT.textContent = active ? "■ Stop" : "▶ Start"; bBtnR.setAttribute("fill", active ? "#c4472f" : "#2f8a57");
+  const lab = !active ? "▶ Start" : running ? "❚❚ Pause" : "▶ Continue";
+  $("hRun").textContent = !active ? "▶ Start run" : lab; $("hRun").classList.toggle("stop", active && running);
+  bBtnT.textContent = lab; bBtnR.setAttribute("fill", active && running ? "#c06f12" : "#2f8a57");
 }
 function updateProgram() {
   const st = S.programStatus(s);
@@ -552,7 +563,7 @@ function updateProgram() {
   bTitle.textContent = `${k} · ${ph.name}`;
   bSub.textContent = `Cycle ${st.cycle} of ${st.cycles} · ${mm(ph.min * 60 - st.left)} of ${mm(ph.min * 60)}`;
   bLeft.textContent = mm(st.left) + " left";
-  bNext.textContent = nxt ? `next: ${nxt.name}` : "then analysis";
+  bNext.textContent = !running ? "paused: press Continue" : nxt ? `next: ${nxt.name}` : "then analysis";
   $("demo").innerHTML = `<b>Cycle ${st.cycle}/${st.cycles} · ${k} ${ph.name}</b> · ${mm(st.left)} left · run ${mm(st.elapsed)} of ${mm(st.total)}<br>${PH_INFO[ph.key]}`;
 }
 
