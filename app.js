@@ -308,13 +308,19 @@ txt(pcX + 150, pcY + 120, "PT-301 · TE-201, last 60 min", "mono", null, "end", 
 
 /* ---------------- phase banner on the drawing ---------------- */
 const PH_COL = { ar: "#56646b", evac: "#0d6f8f", react: "#5b4fc4", rel: "#c06f12" };
-const banner = el("g", { "pointer-events": "none" });
-const bRect = el("rect", { x: 560, y: 8, width: 330, height: 54, rx: 9, fill: "#fff", stroke: "#d4dcdb", "stroke-width": 1.4 }, banner);
-const bChip = el("rect", { x: 568, y: 16, width: 8, height: 38, rx: 3, fill: "#c4cdcf" }, banner);
-const bTitle = txt(586, 33, "No run", "tag", banner, "start", "font-size:16px;font-weight:700");
-const bSub = txt(586, 51, "Set the phase times and press Start run", "small", banner, "start", "font-size:11.5px");
-const bLeft = txt(880, 33, "", "mono", banner, "end", "font-size:16px;font-weight:700");
-const bNext = txt(880, 51, "", "small", banner, "end", "font-size:11px");
+const banner = el("g", {});
+const bRect = el("rect", { x: 518, y: 8, width: 420, height: 54, rx: 9, fill: "#fff", stroke: "#d4dcdb", "stroke-width": 1.4, "pointer-events": "none" }, banner);
+const bChip = el("rect", { x: 526, y: 16, width: 8, height: 38, rx: 3, fill: "#c4cdcf" }, banner);
+const bTitle = txt(544, 33, "No run", "tag", banner, "start", "font-size:16px;font-weight:700");
+const bSub = txt(544, 51, "Set the phase times and press Start run", "small", banner, "start", "font-size:11.5px");
+const bLeft = txt(838, 33, "", "mono", banner, "end", "font-size:16px;font-weight:700");
+const bNext = txt(838, 51, "", "small", banner, "end", "font-size:11px");
+const bBtn = el("g", { class: "click", tabindex: 0, role: "button", "aria-label": "Start or stop the run" }, banner);
+const bBtnR = el("rect", { x: 852, y: 18, width: 78, height: 34, rx: 17, fill: "#2f8a57", class: "vb" }, bBtn);
+const bBtnT = txt(891, 40, "▶ Start", "mono", bBtn, "middle", "font-size:13px;font-weight:700;fill:#fff");
+const runToggle = () => { const st = S.programStatus(s); if (st && !st.done) $("bStop").click(); else $("bStart").click(); };
+bBtn.addEventListener("click", (e) => { e.stopPropagation(); runToggle(); });
+bBtn.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); runToggle(); } });
 
 /* ---------------- tooltips ---------------- */
 const tip = $("tip");
@@ -523,9 +529,15 @@ $("bStart").addEventListener("click", () => {
   if (speed < 60) { speed = 60; $("sSpeed").value = "60"; }
 });
 $("bStop").addEventListener("click", () => { S.stopProgram(s); $("bStop").disabled = true; running = false; $("bPlay").textContent = "Resume"; speed = +$("sSpeed").value; });
+$("hRun").addEventListener("click", () => runToggle());
+function runButtons(active) {
+  $("hRun").textContent = active ? "■ Stop run" : "▶ Start run"; $("hRun").classList.toggle("stop", active);
+  bBtnT.textContent = active ? "■ Stop" : "▶ Start"; bBtnR.setAttribute("fill", active ? "#c4472f" : "#2f8a57");
+}
 function updateProgram() {
   const st = S.programStatus(s);
-  if (!st) { bTitle.textContent = "No run"; bSub.textContent = "Set the phase times and press Start run"; bLeft.textContent = ""; bNext.textContent = ""; bChip.setAttribute("fill", "#c4cdcf"); return; }
+  runButtons(!!(st && !st.done));
+  if (!st) { bTitle.textContent = "No run"; bSub.textContent = "Set the phase times, then press Start"; bLeft.textContent = ""; bNext.textContent = ""; bChip.setAttribute("fill", "#c4cdcf"); return; }
   drawBar(st);
   if (st.done) {
     bTitle.textContent = st.stopped ? "Run stopped" : "Run complete"; bChip.setAttribute("fill", st.stopped ? "#c4472f" : "#2f8a57");

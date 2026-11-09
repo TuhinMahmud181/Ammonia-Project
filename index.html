@@ -46,6 +46,10 @@ header p { margin: 4px 0 0; color: var(--muted); max-width: 78ch; }
 .pill.run { border-color: var(--ok); color: var(--ok); }
 .pill.warn { border-color: var(--sun); color: #9a5c06; background: #fff6e8; }
 .pill.bad { border-color: var(--hot); color: var(--hot); background: #fdeeea; }
+.runbtn { font-family: var(--font-mono); font-size: 14px; font-weight: 700; padding: 6px 16px; border-radius: 999px; background: var(--ok); border: 1px solid var(--ok); color: #fff; cursor: pointer; }
+.runbtn:hover { filter: brightness(1.08); }
+.runbtn.stop { background: var(--hot); border-color: var(--hot); }
+.pills { align-items: center; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
 .top { display: grid; grid-template-columns: minmax(0, 1fr) 370px; gap: 16px; align-items: start; }
 .scene { padding: 0; overflow: hidden; position: relative; }
@@ -201,6 +205,7 @@ th { font-size: 12px; color: var(--muted); font-weight: 500; }
       <span class="pill run" id="pState">Running</span>
       <span class="pill" id="pSpeed">×60</span>
       <span class="pill bad" id="pAlarm" hidden></span>
+      <button class="runbtn" id="hRun" type="button">▶ Start run</button>
     </div>
   </header>
 
